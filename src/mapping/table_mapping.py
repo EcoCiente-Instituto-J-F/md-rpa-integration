@@ -1,81 +1,14 @@
-
-TABLE_MAPPING = {
-
-
-"usuario":{
-
-"destination":
-"tb_usuarios",
-
-"columns":{
-
-"id_usuario":
-"id_usuario",
-
-"nome":
-"nome",
-
-"email":
-"email",
-
-"senha_hash":
-"senha_hash"
-
+TABLE_MAPPING={
+ 'usuario':'tb_usuarios',
+ 'endereco':'tb_enderecos',
+ 'telefone_usuario':'tb_telefones',
+ 'tipo_usuario':'tb_lkp_tipos_usuarios',
+ 'cooperativa':'tb_cooperativas',
+ 'condominio':'tb_condominios',
+ 'torre':'tb_torres',
+ 'morador':'tb_moradores',
+ 'postagem':'tb_postagens',
+ 'quiz':'tb_quizzes',
+ 'resultado_quiz':'tb_tentativas_quiz',
+ 'material':'tb_lkp_categorias_residuos'
 }
-
-},
-
-
-
-"endereco":{
-
-"destination":
-"tb_enderecos",
-
-"columns":{
-
-"id_endereco":
-"id_endereco",
-
-"cidade":
-"cidade",
-
-"estado":
-"estado",
-
-"bairro":
-"bairro"
-
-}
-
-}
-
-}
-
-
-
-TABLE_ORDER=[
-
-"tipo_usuario",
-
-"endereco",
-
-"usuario",
-
-"cooperativa",
-
-"condominio",
-
-"torre",
-
-"morador",
-
-"material",
-
-"postagem",
-
-"quiz",
-
-"pontuacao"
-
-]
