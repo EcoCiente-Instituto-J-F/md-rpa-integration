@@ -1,34 +1,4 @@
 import time
-
-
-
 class Timer:
-
-
-    def start(self):
-
-        self.begin=time.time()
-
-
-
-    def stop(self):
-
-        self.end=time.time()
-
-
-
-    def report(self):
-
-        total=self.end-self.begin
-
-        return (
-
-        f"""
-        MIGRAÇÃO FINALIZADA
-
-        Tempo:
-        {total:.2f} segundos
-
-        """
-
-        )
+ def __enter__(self): self.start=time.time(); return self
+ def __exit__(self,*args): self.elapsed=time.time()-self.start
