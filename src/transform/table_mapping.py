@@ -1,0 +1,14 @@
+TABLE_MAPPING={
+ 'usuario':'tb_usuarios',
+ 'endereco':'tb_enderecos',
+ 'telefone_usuario':'tb_telefones',
+ 'tipo_usuario':'tb_lkp_tipos_usuarios',
+ 'cooperativa':'tb_cooperativas',
+ 'condominio':'tb_condominios',
+ 'torre':'tb_torres',
+ 'morador':'tb_moradores',
+ 'postagem':'tb_postagens',
+ 'quiz':'tb_quizzes',
+ 'resultado_quiz':'tb_tentativas_quiz',
+ 'material':'tb_lkp_categorias_residuos'
+}
