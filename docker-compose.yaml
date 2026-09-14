@@ -1,0 +1,207 @@
+version: "3.9"
+
+
+services:
+
+
+  # =====================================
+  # BANCO LEGADO
+  # =====================================
+
+  postgres_legacy:
+
+
+    image: postgres:16
+
+
+    container_name: migration_legacy_db
+
+
+    restart: always
+
+
+
+    environment:
+
+
+      POSTGRES_DB:
+        ecociente_legado
+
+
+      POSTGRES_USER:
+        postgres
+
+
+      POSTGRES_PASSWORD:
+        postgres
+
+
+
+    ports:
+
+
+      - "5432:5432"
+
+
+
+    volumes:
+
+
+      - legacy_data:/var/lib/postgresql/data
+
+
+
+    networks:
+
+
+      - migration_network
+
+
+
+
+
+  # =====================================
+  # BANCO NOVO NORMALIZADO
+  # =====================================
+
+
+  postgres_target:
+
+
+    image: postgres:16
+
+
+    container_name: migration_target_db
+
+
+    restart: always
+
+
+
+    environment:
+
+
+      POSTGRES_DB:
+        ecociente_normalizado
+
+
+      POSTGRES_USER:
+        postgres
+
+
+      POSTGRES_PASSWORD:
+        postgres
+
+
+
+    ports:
+
+
+      - "5433:5432"
+
+
+
+    volumes:
+
+
+      - target_data:/var/lib/postgresql/data
+
+
+
+    networks:
+
+
+      - migration_network
+
+
+
+
+
+  # =====================================
+  # APLICAÇÃO RPA
+  # =====================================
+
+
+  migration_rpa:
+
+
+    build:
+
+      context: .
+
+
+
+    container_name: migration_rpa_app
+
+
+
+    depends_on:
+
+
+      - postgres_legacy
+
+      - postgres_target
+
+
+
+    env_file:
+
+
+      - .env
+
+
+
+    volumes:
+
+
+      - ./logs:/app/logs
+
+
+      - ./reports:/app/reports
+
+
+
+    networks:
+
+
+      - migration_network
+
+
+
+    command:
+
+
+      python main.py
+
+
+
+
+
+# =====================================
+# VOLUMES
+# =====================================
+
+
+volumes:
+
+
+  legacy_data:
+
+
+  target_data:
+
+
+
+
+
+# =====================================
+# NETWORK
+# =====================================
+
+
+networks:
+
+
+  migration_network:
+
+    driver: bridge
