@@ -72,44 +72,34 @@ class MigrationScheduler:
 
 
 
-            logger.info(
-
-                "Scheduler iniciando migração"
-
-            )
-
-
+            logger.info("Scheduler iniciando migração")
 
             try:
-
 
                 success = self.orchestrator.execute()
 
 
-
                 if success:
 
-
                     logger.info(
-
                         "Execução automática concluída"
-
                     )
-
 
                 else:
 
-
                     logger.error(
-
                         "Execução automática falhou"
-
                     )
 
 
+            except Exception as error:
+
+                logger.exception(
+                    f"Erro inesperado no Scheduler RPA: {error}"
+                )
+
 
             finally:
-
 
                 self.running = False
 
