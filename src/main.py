@@ -1,19 +1,11 @@
 """
 Entrada principal da aplicação RPA.
 """
-
-
 import sys
-
 from config.logging_config import get_logger
-
 from src.rpa.orchestrator import MigrationOrchestrator
 
-
-
 logger = get_logger()
-
-
 
 def main():
 
