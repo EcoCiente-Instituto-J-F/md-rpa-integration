@@ -1,4 +1,4 @@
-from src.transform.id_mapper import IDMapper
+from transform.id_mapper import IDMapper
 
 
 

@@ -4,15 +4,14 @@ Configurações globais do projeto RPA de migração.
 
 from pathlib import Path
 
-from pydantic import (
+from pydantic_settings import (
     BaseSettings,
     SettingsConfigDict
 )
 
 
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings(BaseSettings):
@@ -34,10 +33,29 @@ class Settings(BaseSettings):
     # Banco
     # ==============================
 
-    LEGACY_DATABASE_URL: str
+    # ==============================
+    # Banco
+    # ==============================
 
+    # URLs completas
+    LEGACY_DATABASE_URL: str
     TARGET_DATABASE_URL: str
 
+
+    # Banco legado
+    LEGACY_DB_HOST: str
+    LEGACY_DB_PORT: int
+    LEGACY_DB_NAME: str
+    LEGACY_DB_USER: str
+    LEGACY_DB_PASSWORD: str
+
+
+    # Banco destino
+    TARGET_DB_HOST: str
+    TARGET_DB_PORT: int
+    TARGET_DB_NAME: str
+    TARGET_DB_USER: str
+    TARGET_DB_PASSWORD: str
 
     TARGET_SCHEMA: str = "public"
 
@@ -103,14 +121,10 @@ class Settings(BaseSettings):
 
 
     model_config = SettingsConfigDict(
-
-        env_file=".env",
-
-        env_file_encoding="utf-8",
-
-        case_sensitive=True
-
-    )
+    env_file=BASE_DIR / ".env",
+    env_file_encoding="utf-8",
+    case_sensitive=True
+)
 
 
 
