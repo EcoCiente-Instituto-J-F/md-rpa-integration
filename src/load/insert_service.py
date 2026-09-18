@@ -13,9 +13,9 @@ Responsável por:
 from sqlalchemy import text
 
 from sqlalchemy.exc import SQLAlchemyError
-from src.load.primary_keys import PRIMARY_KEYS
+from load.primary_keys import PRIMARY_KEYS
 from config.logging_config import get_logger
-from src.rpa.retry_handler import RetryHandler
+from rpa.retry_handler import RetryHandler
 
 logger = get_logger()
 
