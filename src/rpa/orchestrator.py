@@ -68,8 +68,7 @@ class MigrationOrchestrator:
 
         self.normalizer = DataNormalizer()
 
-        self.validator = DataValidator(        self.error_report
-)
+        self.validator = DataValidator()
 
         self.insert_service = InsertService(
 
