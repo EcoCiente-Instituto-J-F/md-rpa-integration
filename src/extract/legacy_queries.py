@@ -14,27 +14,15 @@ Responsável por:
 
 def get_users():
 
-
     return """
-
     SELECT
-
         u.id_usuario AS legacy_usuario_id,
-
         u.nome AS nome,
-
         u.email AS email,
-
-        u.telefone AS telefone,
-
         u.cpf AS cpf,
-
         u.data_cadastro AS data_cadastro
 
-
     FROM usuario u;
-
-
     """
 
 
