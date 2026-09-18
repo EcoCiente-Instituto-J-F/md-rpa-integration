@@ -3,12 +3,15 @@ Entrada principal da aplicação RPA.
 """
 import sys
 from config.logging_config import get_logger
-from src.rpa.orchestrator import MigrationOrchestrator
+from rpa.orchestrator import MigrationOrchestrator
+from config.settings import settings
 
 logger = get_logger()
 
 def main():
 
+    print("LEGACY:", settings.LEGACY_DATABASE_URL)
+    print("TARGET:", settings.TARGET_DATABASE_URL)
     logger.info(
         "========== MIGRATION RPA START =========="
     )
