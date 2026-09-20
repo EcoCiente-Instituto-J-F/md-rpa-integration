@@ -178,3 +178,43 @@ Formato: `DATA | ARQUIVO | NÍVEL | MENSAGEM`
 ```
 2026-09-20 18:21:34 | orchestrator.py | INFO | ETAPA 5 - CARGA
 ```
+
+## Estrutura do projeto
+
+```
+md-rpa-integration/
+├── config/
+│   └── migration_order.py
+├── src/
+│   ├── main.py                  # ponto de entrada
+│   ├── config/                  # settings, banco e logging
+│   ├── extract/                 # legacy_queries, legacy_connector, extract_service
+│   ├── transform/               # normalization, data_mapper, validators
+│   ├── load/                    # insert_service, transaction_manager, primary_keys
+│   ├── rpa/                     # orchestrator, retry_handler, scheduler
+│   └── audit/                   # migration_log, error_report, reconciliation
+├── test/                        # testes com pytest
+├── scripts/pr-bot/              # geração automática de PR
+├── logs/                        # migration.log e errors.log
+├── reports/
+├── docker-compose.yaml
+├── Dockerfile
+├── requirements.txt
+└── .env.example
+```
+
+## Contribuindo
+
+Para contribuir com o projeto, siga estas etapas:
+
+1. Bifurque este repositório.
+2. Crie um branch: `git checkout -b <nome_branch>`.
+3. Faça suas alterações e confirme-as: `git commit -m '<mensagem_commit>'`
+4. Envie para o branch original: `git push origin <nome_branch>`
+5. Crie a solicitação de pull.
+
+Como alternativa, consulte a documentação do GitHub em [como criar uma solicitação pull](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/creating-a-pull-request).
+
+## 📝 Licença
+
+Esse projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
