@@ -213,6 +213,23 @@ md-rpa-integration/
 └── .env.example
 ```
 
+## Colaboradores
+
+Agradecemos às seguintes pessoas que contribuíram para este projeto:
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/shinitihm" title="Perfil no GitHub">
+        <img src="https://github.com/shinitihm.png" width="100px;" alt="Foto de shinitihm no GitHub"/><br>
+        <sub>
+          <b>shinitihm</b>
+        </sub>
+      </a>
+    </td>
+  </tr>
+</table>
+
 ## Contribuindo
 
 Para contribuir com o projeto, siga estas etapas:
@@ -225,6 +242,12 @@ Para contribuir com o projeto, siga estas etapas:
 
 Como alternativa, consulte a documentação do GitHub em [como criar uma solicitação pull](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/creating-a-pull-request).
 
-## 📝 Licença
+## Licença
 
 Esse projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+
+<div align="center">
+
+Desenvolvido por:
+
+<img src="assets/logo-ecociente.png" alt="EcoCiente - Dados que despertam a consciência" width="320"> </div>
