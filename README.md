@@ -1,5 +1,15 @@
 # Migration RPA System
 
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-D71F00?style=for-the-badge&logo=sqlalchemy&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![GitHub repo size](https://img.shields.io/github/repo-size/EcoCiente-Instituto-J-F/md-rpa-integration?style=for-the-badge)
+![GitHub last commit](https://img.shields.io/github/last-commit/EcoCiente-Instituto-J-F/md-rpa-integration?style=for-the-badge)
+![License](https://img.shields.io/github/license/EcoCiente-Instituto-J-F/md-rpa-integration?style=for-the-badge)
+
+> Automação em Python (RPA/ETL) que migra os dados do banco legado do EcoCiente para o novo banco normalizado, com carga transacional, retry, auditoria e reconciliação pós-migração.
+
 ## Sobre
 
 O projeto lê o banco legado (modelo do primeiro ano), normaliza e converte os registros para o modelo novo (`tb_*`) e carrega tudo em uma única transação no PostgreSQL de destino. Ao final, confere se o que foi migrado bate com a origem.
