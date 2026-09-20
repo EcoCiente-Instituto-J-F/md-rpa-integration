@@ -10,5 +10,6 @@ TABLE_MAPPING={
  'postagem':'tb_postagens',
  'quiz':'tb_quizzes',
  'resultado_quiz':'tb_tentativas_quiz',
- 'material':'tb_lkp_categorias_residuos'
+ 'material':'tb_lkp_categorias_residuos',
+ 'sindico':'tb_sindicos'
 }

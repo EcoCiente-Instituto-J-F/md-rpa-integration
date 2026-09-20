@@ -8,8 +8,9 @@ from config.settings import settings
 
 logger = get_logger()
 
+from datetime import datetime
 def main():
-
+    print("Início:", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     print("LEGACY:", settings.LEGACY_DATABASE_URL)
     print("TARGET:", settings.TARGET_DATABASE_URL)
     logger.info(
@@ -34,7 +35,7 @@ def main():
                 "Migração executada com sucesso"
             )
 
-
+            print("Fim:", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             return 0
 
 
@@ -46,14 +47,14 @@ def main():
                 "Migração finalizada com falhas"
             )
 
-
+            print("Fim:", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             return 1
 
 
 
     except Exception as error:
 
-
+        
         logger.exception(
 
             f"Erro crítico na aplicação: {error}"
@@ -62,6 +63,7 @@ def main():
 
 
         return 1
+    
 
 
 
@@ -69,4 +71,6 @@ def main():
 if __name__ == "__main__":
     sys.exit(
         main()
+        
     )
+    

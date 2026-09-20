@@ -288,12 +288,17 @@ class MigrationOrchestrator:
         result = self.reconciliation.run({
 
             "usuario":
-            "usuario",
+    "tb_usuarios",
 
-            "endereco":
-            "endereco"
+    "endereco":
+    "tb_enderecos",
 
-        })
+    "sindico":
+    "tb_sindicos"
+
+        },
+            self.mapper.id_mapping
+        )
 
 
         return result
@@ -332,21 +337,18 @@ class MigrationOrchestrator:
             extracted = self.extract()
 
 
-
-            mapped = self.transform(
+            normalized = self.normalize(
                 extracted
             )
 
 
-
-            normalized = self.normalize(
-                mapped
+            mapped = self.transform(
+                normalized
             )
 
 
-
             validated = self.validate(
-                normalized
+                mapped
             )
 
 
@@ -359,7 +361,21 @@ class MigrationOrchestrator:
 
                 )
 
-            self.run_reconciliation()
+            reconciliation_result = self.run_reconciliation()
+
+
+            failed_tables = [
+                item
+                for item in reconciliation_result
+                if item["status"] != "OK"
+            ]
+
+
+            if failed_tables:
+
+                raise Exception(
+                    f"Falha na reconciliação: {failed_tables}"
+                )
 
 
             end_time = datetime.now()

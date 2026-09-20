@@ -263,9 +263,9 @@ class DataValidator:
 
             "usuario",
 
-            "nome",
+            "nome_usuario",
 
-            usuario.get("nome")
+            usuario.get("nome_usuario")
 
         ):
 
@@ -274,7 +274,7 @@ class DataValidator:
 
 
         email = usuario.get(
-            "email"
+            "email_usuario"
         )
 
 
@@ -448,6 +448,13 @@ class DataValidator:
 
                     )
 
+
+
+        if "sindicos" in dataset:
+
+            valid_records["sindicos"] = list(
+                dataset["sindicos"]
+            )
 
 
         logger.info(

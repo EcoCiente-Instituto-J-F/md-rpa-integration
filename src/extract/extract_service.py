@@ -67,49 +67,26 @@ class ExtractService:
     # EXTRAÇÃO COMPLETA DO LEGADO
     # ======================================
 
-    # ======================================
-    # EXTRAÇÃO COMPLETA DO LEGADO
-    # ======================================
 
     def extract_all(self):
 
-        logger.info(
-            "Extração completa do legado iniciada"
-        )
-
-
         extracted_data = {}
-
 
         extracted_data["usuarios"] = self.extract_table(
             legacy_queries.get_users()
         )
 
-
         extracted_data["enderecos"] = self.extract_table(
             legacy_queries.get_addresses()
         )
-
 
         extracted_data["condominios"] = self.extract_table(
             legacy_queries.get_condominiums()
         )
 
-
-        extracted_data["materiais"] = self.extract_table(
-            legacy_queries.get_materials()
+        extracted_data["sindicos"] = self.extract_table(
+            legacy_queries.get_managers()
         )
-
-
-        extracted_data["conteudos"] = self.extract_table(
-            legacy_queries.get_educational_contents()
-        )
-
-
-        logger.info(
-            "Extração completa finalizada"
-        )
-
 
         return extracted_data
 

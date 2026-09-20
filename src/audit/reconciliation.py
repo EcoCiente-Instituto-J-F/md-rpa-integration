@@ -14,6 +14,7 @@ from datetime import datetime
 from sqlalchemy import text
 
 from config.logging_config import get_logger
+from load.primary_keys import PRIMARY_KEYS
 
 
 
@@ -226,12 +227,91 @@ class Reconciliation:
 
 
     # =====================================================
+    # COMPARAR SOMENTE O QUE FOI MIGRADO NESTA EXECUÇÃO
+    # =====================================================
+
+    def compare_migrated(
+        self,
+        legacy_table,
+        target_table,
+        new_ids
+    ):
+        """
+        O destino pode já ter dados de outras origens,
+        então compara o legado com os IDs criados
+        nesta execução (id_mapping), e não com o
+        COUNT(*) total da tabela destino.
+        """
+
+        logger.info(
+            f"Iniciando reconciliação "
+            f"{legacy_table} -> {target_table}"
+        )
+
+        primary_key = PRIMARY_KEYS[target_table]
+
+        legacy_count = self.count_records(
+            self.legacy_engine,
+            legacy_table
+        )
+
+        new_ids = list(new_ids)
+
+        query = text(
+            f"""
+            SELECT COUNT(*)
+            FROM {target_table}
+            WHERE {primary_key} = ANY(:ids)
+            """
+        )
+
+        with self.target_engine.connect() as connection:
+
+            target_count = connection.execute(
+                query,
+                {"ids": new_ids}
+            ).scalar()
+
+        difference = legacy_count - target_count
+
+        status = (
+            "OK"
+            if difference == 0
+            else "DIVERGENCIA"
+        )
+
+        result = {
+            "source_table": legacy_table,
+            "target_table": target_table,
+            "source_count": legacy_count,
+            "target_count": target_count,
+            "difference": difference,
+            "status": status,
+            "checked_at": datetime.now()
+        }
+
+        self.results.append(result)
+
+        if status == "OK":
+            logger.info(
+                f"Tabela validada: {legacy_table}"
+            )
+        else:
+            logger.error(
+                f"Divergência encontrada: "
+                f"{legacy_table}"
+            )
+
+        return result
+
+    # =====================================================
     # RECONCILIAÇÃO COMPLETA
     # =====================================================
 
     def run(
         self,
-        mappings
+        mappings,
+        id_mapping=None
     ):
 
 
@@ -261,14 +341,20 @@ class Reconciliation:
 
         for legacy, target in mappings.items():
 
+            if id_mapping is not None and legacy in id_mapping:
 
-            self.compare_table(
+                self.compare_migrated(
+                    legacy,
+                    target,
+                    id_mapping[legacy].values()
+                )
 
-                legacy,
+            else:
 
-                target
-
-            )
+                self.compare_table(
+                    legacy,
+                    target
+                )
 
 
 
@@ -281,7 +367,7 @@ class Reconciliation:
 
         return self.results
 
-
+    
 
     # =====================================================
     # RELATÓRIO FINAL
