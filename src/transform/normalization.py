@@ -326,6 +326,7 @@ class DataNormalizer:
 
 
         return {
+            **usuario,
 
 
             "nome":
@@ -376,6 +377,7 @@ class DataNormalizer:
 
 
         return {
+            **endereco,
 
 
             "logradouro":
@@ -384,10 +386,6 @@ class DataNormalizer:
                 ),
 
 
-            "bairro":
-                self.normalize_text(
-                    endereco.get("bairro")
-                ),
 
 
             "cidade":
@@ -455,6 +453,14 @@ class DataNormalizer:
 
             ]
 
+
+
+        # Síndicos não têm campos a normalizar: repassa sem descartar
+        if "sindicos" in dataset:
+
+            normalized["sindicos"] = list(
+                dataset["sindicos"]
+            )
 
 
         logger.info(
