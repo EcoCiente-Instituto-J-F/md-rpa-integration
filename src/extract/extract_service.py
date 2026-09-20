@@ -67,9 +67,6 @@ class ExtractService:
     # EXTRAÇÃO COMPLETA DO LEGADO
     # ======================================
 
-    # ======================================
-    # EXTRAÇÃO COMPLETA DO LEGADO
-    # ======================================
 
     def extract_all(self):
 

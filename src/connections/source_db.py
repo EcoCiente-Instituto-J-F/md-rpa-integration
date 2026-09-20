@@ -1,6 +1,5 @@
 import pandas as pd
-
-from src.config.database import create_source_engine
+from config.database import create_source_engine
 
 
 
