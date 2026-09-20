@@ -17,9 +17,12 @@ def get_users():
     return """
     SELECT
         u.id_usuario AS legacy_usuario_id,
+        u.id_endereco AS legacy_endereco_id,
+        u.id_tipo_usuario AS tipo_usuario_id,
         u.nome AS nome,
         u.email AS email,
-        u.cpf AS cpf,
+        NULL AS cpf,
+        u.status AS ativo,
         u.data_cadastro AS data_cadastro
 
     FROM usuario u;
@@ -40,7 +43,7 @@ def get_addresses():
 
         e.id_endereco AS legacy_endereco_id,
 
-        e.logradouro AS logradouro,
+        e.rua AS logradouro,
 
         e.numero AS numero,
 
@@ -50,7 +53,9 @@ def get_addresses():
 
         e.estado AS estado,
 
-        e.cep AS cep
+        e.cep AS cep,
+
+        e.complemento AS complemento
 
 
     FROM endereco e;
@@ -86,85 +91,89 @@ def get_condominiums():
     """
 
 
-
 # =====================================================
 # MATERIAL
 # =====================================================
 
 def get_materials():
 
-
     return """
 
     SELECT
 
         m.id_material AS legacy_material_id,
-
         m.nome AS nome,
-
         m.descricao AS descricao,
-
-        m.categoria AS categoria
-
+        m.reciclavel,
+        m.compostavel,
+        m.instrucoes_descarte,
+        m.status
 
     FROM material m;
 
-
     """
 
+# =====================================================
+# SÍNDICO
+# =====================================================
 
+def get_managers():
+
+    return """
+
+    SELECT
+
+        s.id_sindico AS legacy_sindico_id,
+        s.cpf AS cpf,
+        s.data_inicio_mandato AS data_inicio_mandato,
+        s.data_fim_mandato AS data_fim_mandato,
+        s.id_usuario AS legacy_usuario_id,
+        s.id_condominio AS legacy_condominio_id
+
+    FROM sindico s;
+
+    """
 
 # =====================================================
 # CONTEÚDO EDUCATIVO
 # =====================================================
-
 def get_educational_contents():
-
 
     return """
 
     SELECT
 
         c.id_conteudo AS legacy_conteudo_id,
-
         c.titulo AS titulo,
-
         c.descricao AS descricao,
-
-        c.url AS url
-
+        c.tipo_conteudo AS tipo,
+        c.nivel AS nivel,
+        c.duracao AS duracao,
+        c.data_publicacao AS data_publicacao,
+        c.status AS status
 
     FROM conteudo_educativo c;
 
-
     """
 
-def get_users_batch(
-    limit,
-    offset
-):
-
+def get_users_batch(limit, offset):
 
     return f"""
 
     SELECT
 
         u.id_usuario AS legacy_usuario_id,
-
         u.nome,
-
         u.email,
-
-        u.telefone,
-
-        u.cpf
-
+        t.numero AS telefone,
+        NULL AS cpf
 
     FROM usuario u
 
+    LEFT JOIN telefone_usuario t
+        ON t.id_usuario = u.id_usuario
 
     ORDER BY u.id_usuario
-
 
     LIMIT {limit}
 
