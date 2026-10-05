@@ -8,139 +8,92 @@
 ![GitHub last commit](https://img.shields.io/github/last-commit/EcoCiente-Instituto-J-F/md-rpa-integration?style=for-the-badge)
 ![License](https://img.shields.io/github/license/EcoCiente-Instituto-J-F/md-rpa-integration?style=for-the-badge)
 
-> Automação em Python (RPA/ETL) que migra os dados do banco legado do EcoCiente para o novo banco normalizado, com carga transacional, retry, auditoria e reconciliação pós-migração.
+> Automação em Python (RPA/ETL) que migra os dados do banco legado do EcoCiente para o novo banco normalizado, com interface local, carga transacional, reconciliação antes do COMMIT e reexecução sem duplicar.
 
 ## Sobre
 
-O projeto lê o banco legado (modelo do primeiro ano), normaliza e converte os registros para o modelo novo (`tb_*`) e carrega tudo em uma única transação no PostgreSQL de destino. Ao final, confere se o que foi migrado bate com a origem.
+O projeto lê o banco legado (modelo do primeiro ano), normaliza e converte os registros para o modelo novo (`tb_*`) e carrega tudo em uma única transação no PostgreSQL de destino. Antes de gravar, confere se a conta fecha para cada tabela:
 
-Cada execução passa por estas etapas:
+```
+registros no legado = migrados + já migrados + rejeitados
+```
+
+Se não fechar, nada é gravado.
 
 ```mermaid
 flowchart LR
-    A[Health check<br/>dos bancos] --> B[1. Extração]
-    B --> C[2. Normalização]
-    C --> D[3. Transformação<br/>Data Mapper]
-    D --> E[4. Validação]
-    E --> F[5. Carga<br/>transação + retry]
-    F --> G[6. Reconciliação]
-    G --> H[Auditoria<br/>SUCCESS / FAILED]
-    F -. erro .-> R[(ROLLBACK)]
+    A[Verificação<br/>dos bancos] --> B[Extração]
+    B --> C[Normalização]
+    C --> D[Transformação]
+    D --> E[Validação]
+    E --> F[Carga]
+    F --> G[Reconciliação]
+    G -- fechou --> H[(COMMIT)]
+    G -. não fechou .-> R[(ROLLBACK)]
 ```
 
-### Ajustes e melhorias
+### Estado atual
 
-O projeto ainda está em desenvolvimento. Estado atual:
-
-- [x] Extração do legado (usuários, endereços, condomínios, síndicos)
-- [x] Normalização (nome, e-mail, CPF, CEP, telefone, datas)
-- [x] Data Mapper com mapeamento de IDs legado → novo
-- [x] Validação (e-mail, CPF, CEP, campos obrigatórios)
-- [x] Carga transacional com retry e rollback
-- [x] Carga de `tb_enderecos`, `tb_usuarios` e `tb_sindicos`
-- [x] Reconciliação por execução (compara só os IDs criados na rodada)
-- [x] Auditoria e logs (`logs/migration.log`, `logs/errors.log`)
-- [ ] Carga de condomínios, moradores, telefones e cooperativas
-- [ ] Carga idempotente (rodar duas vezes não duplicar dados)
-- [ ] Corrigir execução via Docker (ver aviso abaixo)
-- [ ] Scheduler de execução automática
+- [x] Interface local com simulação, migração, rejeitados e log
+- [x] Carga de `tb_enderecos`, `tb_usuarios`, `tb_sindicos` e `tb_condominios`
+- [x] Registro inválido ou órfão é rejeitado com motivo, sem derrubar a execução
+- [x] Carga idempotente (rodar duas vezes não duplica)
+- [x] Reconciliação dentro da transação
+- [x] Execução via Docker
+- [ ] CPF e mandato do síndico, telefones, moradores e cooperativas (dependem do schema de destino, que não está neste repositório)
 
 ## Pré-requisitos
 
-Antes de começar, verifique se você tem:
-
 - Python `3.12` ou superior
 - PostgreSQL `16` (pode subir via Docker Compose)
-- Docker e Docker Compose, se for usar os bancos em contêiner
 - O schema do banco de destino aplicado (`ecociente_schema.sql`) e o banco legado populado
-- Windows, Linux ou macOS (o projeto foi desenvolvido e testado no Windows)
 
-## Instalando
+## Usando
 
-Clone o repositório:
+### Interface (Windows)
 
-```bash
-git clone https://github.com/EcoCiente-Instituto-J-F/md-rpa-integration.git
-cd md-rpa-integration
-```
+Dê dois cliques em **`EcoCiente.bat`**. Na primeira vez ele cria o ambiente virtual, instala as dependências e copia `.env.example` para `.env`; depois abre a interface no navegador, em `http://127.0.0.1:8765`.
 
-Crie e ative o ambiente virtual:
+Ajuste as conexões no `.env` e clique em **Verificar conexões**.
 
-Linux e macOS:
+- **Simular** roda todas as etapas e desfaz tudo no final. Use antes de migrar.
+- **Migrar** pede confirmação e grava no destino.
+- **Rejeitados** lista cada registro que ficou de fora, com o motivo.
+- **Encerrar programa** para o servidor local.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
+Para gerar um executável único com a logo como ícone, rode **`build_exe.bat`**. O resultado é `dist\EcoCiente.exe`; o `.env` fica na mesma pasta do executável.
 
-Windows:
+### Interface (Linux e macOS)
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
-```
-
-Instale as dependências:
-
-```bash
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env
+python src/ui.py
 ```
 
-Configure as variáveis de ambiente:
+### Linha de comando
 
 ```bash
-cp .env.example .env
+python src/main.py --simular   # roda sem gravar
+python src/main.py             # migra
 ```
 
-No Windows: `copy .env.example .env`.
+### Docker
 
-<details>
-<summary>Variáveis do <code>.env</code></summary>
+```bash
+docker compose up -d postgres_legacy postgres_target   # só os bancos (5432 e 5433)
+docker compose run --rm migration_rpa                  # migração pela linha de comando
+```
+
+### Variáveis do `.env`
 
 | Variável | Padrão | Descrição |
 | --- | --- | --- |
 | `LEGACY_DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/ecociente_legado` | Conexão com o banco legado |
 | `TARGET_DATABASE_URL` | `postgresql://postgres:postgres@localhost:5433/ecociente_normalizado` | Conexão com o banco de destino |
-| `LEGACY_DB_*` / `TARGET_DB_*` | ver `.env.example` | Host, porta, nome, usuário e senha de cada banco |
-| `BATCH_SIZE` | `500` | Tamanho do lote na extração em batches |
-| `MAX_RETRIES` | `3` | Tentativas da carga antes de falhar de vez |
-| `TIMEOUT_SECONDS` | `60` | Timeout das operações |
-| `MIGRATION_MODE` | `FULL` | Modo de migração (`FULL`, `INCREMENTAL`, `RETRY`) |
+| `MAX_RETRIES` | `3` | Tentativas da carga quando a conexão com o destino cai |
 | `LOG_LEVEL` | `INFO` | Nível de log |
-
-</details>
-
-Para subir só os dois bancos com Docker:
-
-```bash
-docker compose up -d postgres_legacy postgres_target
-```
-
-O legado fica na porta `5432` e o destino na `5433`.
-
-## Usando
-
-Com os bancos no ar e o `.env` preenchido, a partir da raiz do projeto:
-
-```bash
-python src/main.py
-```
-
-Um log de uma execução bem-sucedida termina assim:
-
-```
-reconciliation.py | INFO | Tabela validada: usuario
-reconciliation.py | INFO | Tabela validada: endereco
-reconciliation.py | INFO | Tabela validada: sindico
-orchestrator.py   | INFO | MIGRAÇÃO FINALIZADA COM SUCESSO
-migration_log.py  | INFO | Auditoria finalizada: SUCCESS
-```
-
-> [!WARNING]
-> A carga **ainda não é idempotente**. Cada execução bem-sucedida faz COMMIT e insere tudo de novo. Se rodar duas vezes, os dados ficam duplicados no destino. Antes de repetir uma migração, apague o que a execução anterior inseriu (os IDs criados aparecem no log como `Mapeamento criado ...`).
-
-> [!NOTE]
-> A reconciliação compara a contagem do legado com os IDs criados **nesta execução**, e não com o `COUNT(*)` total da tabela de destino. Assim ela funciona mesmo quando o destino já tem dados de outras origens.
 
 ### Testes
 
@@ -148,65 +101,74 @@ migration_log.py  | INFO | Auditoria finalizada: SUCCESS
 pytest
 ```
 
-### Docker
+Os testes nunca usam os bancos do `.env`. O teste de ponta a ponta só roda quando dois bancos descartáveis são indicados (ele **apaga e recria** as tabelas neles):
 
 ```bash
-docker compose up --build
+TEST_LEGACY_URL=postgresql://... TEST_TARGET_URL=postgresql://... pytest
 ```
-
-> [!CAUTION]
-> O `Dockerfile` e o serviço `migration_rpa` executam `python main.py`, mas o ponto de entrada fica em `src/main.py`. Até isso ser corrigido, rode a aplicação localmente e use o Docker Compose só para os bancos.
 
 ## Como funciona
 
-### Etapas do pipeline
-
 | Etapa | Módulo | O que faz |
 | --- | --- | --- |
-| Extração | `src/extract/` | Consulta o legado (`legacy_queries.py`) e devolve os registros com os IDs antigos como `legacy_*_id` |
-| Normalização | `src/transform/normalization.py` | Padroniza texto, e-mail, CPF/CNPJ, CEP e datas, preservando os campos `legacy_*` |
-| Transformação | `src/transform/data_mapper.py` | Converte o modelo antigo no modelo novo e controla o mapa de IDs legado → novo |
-| Validação | `src/transform/validators.py` | Descarta e registra registros inválidos |
-| Carga | `src/load/insert_service.py` | Insere na ordem das FKs: endereços → usuários → síndicos |
-| Reconciliação | `src/audit/reconciliation.py` | Confere legado × destino |
-| Auditoria | `src/audit/migration_log.py` | Resumo por tabela e status final |
+| Extração | `src/extract/` | Consulta o legado e devolve os registros com os IDs antigos como `legacy_*_id` |
+| Normalização | `src/transform/normalization.py` | Padroniza nome, e-mail, CPF/CNPJ, CEP e o status do usuário |
+| Transformação | `src/transform/data_mapper.py` | Converte o modelo antigo no novo |
+| Validação | `src/transform/validators.py` | Separa os registros inválidos e registra o motivo |
+| Carga | `src/load/insert_service.py` | Insere na ordem das FKs e grava o mapa de IDs |
+| Reconciliação | `src/audit/reconciliation.py` | Confere legado × destino antes do COMMIT |
+| Auditoria | `src/audit/migration_log.py` | Etapas, contagens por tabela e status final |
 
-### Chaves estrangeiras
+A ordem das tabelas e as chaves estrangeiras ficam em `src/entidades.py`.
 
-As FKs do destino só existem depois que o pai é inserido. Por isso o `usuario.endereco_id` e o `sindico.usuario_id` são resolvidos **na hora da carga**, a partir do mapa de IDs preenchido pelos inserts anteriores. Os campos `legacy_*` servem só para esse controle e são removidos antes do `INSERT`.
+### Registros rejeitados
 
-### Transação e retry
+Um registro fica de fora, sem interromper a migração, quando:
 
-- Toda a carga roda em uma única transação: ou entra tudo, ou nada (`ROLLBACK`).
-- Se a carga falha, o `RetryHandler` tenta de novo até `MAX_RETRIES` vezes antes de abortar.
-- O erro é registrado em `logs/errors.log`.
+- falha na validação (campo obrigatório vazio, e-mail, CPF, CNPJ ou CEP inválido);
+- depende de um registro que não foi migrado (por exemplo, usuário de um endereço rejeitado);
+- é recusado pelo banco de destino (por exemplo, e-mail duplicado).
+
+Erros de estrutura, como coluna inexistente, abortam a execução e nada é gravado.
+
+### Idempotência
+
+A carga cria no destino a tabela de controle `migracao_id_map (entidade, legacy_id, novo_id)`. Registro que já está nela não é inserido de novo, então repetir a migração só leva o que faltava.
+
+Se linhas migradas forem apagadas do destino, a reconciliação acusa a divergência. Apague também as linhas correspondentes de `migracao_id_map` para migrá-las outra vez.
+
+### Decisões que valem conferir
+
+- **Senha**: o legado não tem senha. Todo usuário entra com `senha_hash = 'MIGRACAO_TEMP'` e precisa redefinir no primeiro acesso.
+- **Status do usuário**: `status` vazio no legado entra como ativo. Texto é comparado sem diferenciar maiúsculas com `sim`, `s`, `true`, `t`, `1`, `ativo` e `a`; ajuste a lista em `normalization.py` se o legado usar outro valor.
+- **Síndico do condomínio**: no legado o síndico aponta para o condomínio; no destino é o inverso. Com mais de um síndico por condomínio, vale o de maior ID.
+- **Colunas de `tb_condominios`**: vêm do `data_mapper` (`nome_condominio`, `cnpj`, `endereco_id`, `sindico_id`) e não foram conferidas com o schema oficial.
 
 ### Logs
 
-Formato: `DATA | ARQUIVO | NÍVEL | MENSAGEM`
-
-```
-2026-09-20 18:21:34 | orchestrator.py | INFO | ETAPA 5 - CARGA
-```
+`logs/migration.log` (tudo) e `logs/errors.log` (só erros), no formato `DATA | ARQUIVO | NÍVEL | MENSAGEM`.
 
 ## Estrutura do projeto
 
 ```
 md-rpa-integration/
-├── config/
-│   └── migration_order.py
+├── EcoCiente.bat                # abre a interface (Windows)
+├── build_exe.bat                # gera dist\EcoCiente.exe
 ├── src/
-│   ├── main.py                  # ponto de entrada
+│   ├── ui.py                    # servidor local da interface
+│   ├── ui_static/index.html     # a interface
+│   ├── main.py                  # linha de comando
+│   ├── entidades.py             # tabelas, ordem e FKs
 │   ├── config/                  # settings, banco e logging
-│   ├── extract/                 # legacy_queries, legacy_connector, extract_service
+│   ├── extract/                 # legacy_queries, extract_service
 │   ├── transform/               # normalization, data_mapper, validators
-│   ├── load/                    # insert_service, transaction_manager, primary_keys
-│   ├── rpa/                     # orchestrator, retry_handler, scheduler
-│   └── audit/                   # migration_log, error_report, reconciliation
-├── test/                        # testes com pytest
+│   ├── load/                    # insert_service
+│   ├── rpa/                     # orchestrator
+│   └── audit/                   # migration_log, reconciliation
+├── test/                        # pytest (unidade e ponta a ponta)
+├── assets/                      # logo e ícone
 ├── scripts/pr-bot/              # geração automática de PR
-├── logs/                        # migration.log e errors.log
-├── reports/
+├── PRODUCT.md / DESIGN.md       # contexto de produto e de design da interface
 ├── docker-compose.yaml
 ├── Dockerfile
 ├── requirements.txt

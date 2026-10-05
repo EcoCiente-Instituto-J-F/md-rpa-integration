@@ -12,4 +12,4 @@ PRIMARY_KEYS = {
     "tb_cooperativas": "id_cooperativa",
     "tb_materiais": "id_material",
     "tb_conteudos_educativos": "id_conteudo"
-}
+}           
