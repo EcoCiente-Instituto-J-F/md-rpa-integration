@@ -51,7 +51,6 @@ class DataNormalizer:
             **usuario,
             "nome": self.normalize_name(usuario.get("nome")),
             "email": self.normalize_email(usuario.get("email")),
-            "cpf": self.normalize_digits(usuario.get("cpf")),
             "ativo": self.normalize_boolean(usuario.get("ativo")),
         }
 
@@ -59,8 +58,10 @@ class DataNormalizer:
         return {
             **endereco,
             "logradouro": self.normalize_text(endereco.get("logradouro")),
+            "bairro": self.normalize_name(endereco.get("bairro")),
             "cidade": self.normalize_name(endereco.get("cidade")),
-            "estado": self.normalize_text(endereco.get("estado")),
+            "estado": (self.normalize_text(endereco.get("estado")) or "").upper()
+            or None,
             "cep": self.normalize_zipcode(endereco.get("cep")),
         }
 
@@ -71,13 +72,33 @@ class DataNormalizer:
             "cnpj": self.normalize_digits(condominio.get("cnpj")),
         }
 
+    def normalize_cooperativa(self, cooperativa):
+        return {
+            **cooperativa,
+            "nome": self.normalize_text(cooperativa.get("nome")),
+            "email": self.normalize_email(cooperativa.get("email")),
+            "cnpj": self.normalize_digits(cooperativa.get("cnpj")),
+        }
+
+    def normalize_tipo(self, tipo):
+        return {**tipo, "nome_tipo": self.normalize_text(tipo.get("nome_tipo"))}
+
     def normalize_dataset(self, dataset):
         normalizers = {
+            "tipos_usuarios": self.normalize_tipo,
+            "tipos_condominios": self.normalize_tipo,
             "usuarios": self.normalize_usuario,
             "enderecos": self.normalize_endereco,
             "condominios": self.normalize_condominio,
+            "cooperativas": self.normalize_cooperativa,
+            "telefones": lambda t: {
+                **t,
+                "numero": self.normalize_digits(t.get("numero")),
+            },
+            "sindicos": lambda s: {**s, "cpf": self.normalize_digits(s.get("cpf"))},
+            "torres": lambda t: {**t, "nome": self.normalize_text(t.get("nome"))},
         }
-        # Datasets sem normalizador (síndicos) passam adiante sem alteração.
+        # Datasets sem normalizador (moradores) passam adiante sem alteração.
         normalized = {
             name: (
                 [normalizers[name](item) for item in records]

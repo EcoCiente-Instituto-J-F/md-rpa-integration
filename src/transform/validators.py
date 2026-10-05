@@ -17,20 +17,33 @@ def _digits(value, length):
 # entidade -> [(campo, regra, motivo)]. A regra recebe o valor do campo.
 _OBRIGATORIO = (lambda value: value not in (None, ""), "Campo obrigatório vazio")
 RULES = {
+    "tipo_usuario": [("nome_tipo", *_OBRIGATORIO)],
+    "tipo_condominio": [("nome_tipo", *_OBRIGATORIO)],
+    "endereco": [
+        ("cep", lambda v: not v or _digits(v, 8), "CEP deve ter 8 dígitos"),
+    ],
     "usuario": [
         ("nome_usuario", *_OBRIGATORIO),
-        ("tipo_usuario_id", *_OBRIGATORIO),
+        ("email_usuario", *_OBRIGATORIO),
         ("email_usuario", lambda v: not v or bool(_EMAIL.match(v)), "E-mail inválido"),
         ("cpf", lambda v: not v or _digits(v, 11), "CPF deve ter 11 dígitos"),
     ],
-    "endereco": [
-        ("cidade", *_OBRIGATORIO),
-        ("cep", lambda v: not v or _digits(v, 8), "CEP deve ter 8 dígitos"),
-    ],
+    "telefone": [("numero_contato", *_OBRIGATORIO)],
     "sindico": [],
     "condominio": [
         ("nome_condominio", *_OBRIGATORIO),
         ("cnpj", lambda v: not v or _digits(v, 14), "CNPJ deve ter 14 dígitos"),
+    ],
+    "torre": [("nome_torre", *_OBRIGATORIO)],
+    "morador": [],
+    "cooperativa": [
+        ("nome_cooperativa", *_OBRIGATORIO),
+        ("cnpj_cooperativa", *_OBRIGATORIO),
+        (
+            "cnpj_cooperativa",
+            lambda v: not v or _digits(v, 14),
+            "CNPJ deve ter 14 dígitos",
+        ),
     ],
 }
 
