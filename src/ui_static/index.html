@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EcoCiente · Migração</title>
+<link rel="icon" href="/favicon.ico">
+<style>
+:root {
+  /* Marca */
+  --floresta: #064d3c;      /* fundo da logo */
+  --floresta-2: #0a5f4b;
+  --floresta-3: #043a2d;
+  --sobre-floresta: #eaf3ee;
+  --sobre-floresta-2: #a9c9bb;
+  /* Base: neutros puxados para o verde da marca */
+  --papel: #edf2ee;
+  --folha-papel: #fbfdfb;
+  --linha: #d2ddd5;
+  --linha-2: #b3c4b9;
+  --tinta: #1b2a24;
+  --tinta-2: #4d5f56;
+  /* Estados */
+  --broto: #2e7d4f;         /* migrado, fechou */
+  --broto-fundo: #e3f0e6;
+  --musgo: #a9c39a;         /* já estava no destino */
+  --barro: #b4472b;         /* rejeitado, falhou */
+  --barro-fundo: #f8e6df;
+  --ambar: #8a5a00;         /* em andamento */
+  --ambar-fundo: #f6ead0;
+
+  --raio: 8px;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  --saida: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { color-scheme: light; scrollbar-color: var(--linha-2) transparent; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  background: var(--papel);
+  color: var(--tinta);
+  font: 0.875rem/1.5 var(--sans);
+  font-variant-numeric: tabular-nums;
+  caret-color: var(--floresta);
+}
+::selection { background: var(--floresta); color: var(--sobre-floresta); }
+:focus-visible { outline: 2px solid var(--floresta); outline-offset: 2px; border-radius: 4px; }
+.rail :focus-visible { outline-color: var(--sobre-floresta); }
+h1, h2 { margin: 0; text-wrap: balance; }
+h1 { font-size: 1.5rem; line-height: 1.2; font-weight: 650; letter-spacing: -0.015em; }
+h2 { font-size: 1rem; font-weight: 650; }
+p { margin: 0; }
+[hidden] { display: none !important; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+svg.ico { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor;
+  stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.gira { animation: gira 0.9s linear infinite; }
+@keyframes gira { to { transform: rotate(360deg); } }
+
+/* ---------- Trilho lateral ---------- */
+.rail {
+  background: var(--floresta);
+  color: var(--sobre-floresta);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+.rail img { display: block; width: 100%; height: auto; }
+.rail h2 { font-size: 0.75rem; font-weight: 600; color: var(--sobre-floresta-2); padding: 0 20px; }
+.bancos { list-style: none; margin: 8px 0 12px; padding: 0 12px; }
+.bancos li { display: grid; grid-template-columns: 16px 1fr; gap: 2px 10px; padding: 10px 8px;
+  border-radius: 6px; align-items: center; }
+.bancos li + li { margin-top: 2px; }
+.bancos strong { font-weight: 600; }
+.bancos .alvo, .bancos .erro { grid-column: 2; font-size: 0.8125rem; overflow-wrap: anywhere; }
+.bancos .alvo { color: var(--sobre-floresta-2); font-family: var(--mono); font-size: 0.75rem; }
+.bancos .erro { color: #ffd9cc; }
+.bancos .ok { color: #9be0b4; }
+.bancos .falha { color: #ffb59e; }
+.rail .btn { margin: 0 20px; }
+.rail footer { margin-top: auto; padding: 16px 20px 20px; }
+.rail footer .btn { margin: 0; width: 100%; }
+
+/* ---------- Botões ---------- */
+.btn {
+  font: 600 0.875rem/1 var(--sans);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 36px; padding: 0 14px;
+  border-radius: 6px; border: 1px solid var(--linha-2);
+  background: var(--folha-papel); color: var(--tinta);
+  cursor: pointer;
+  transition: background-color 150ms var(--saida), border-color 150ms var(--saida), transform 100ms var(--saida);
+}
+.btn:hover { background: #fff; border-color: var(--tinta-2); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { cursor: not-allowed; color: #6f7f77; background: #e1e9e4; border-color: var(--linha); transform: none; }
+.btn.primario { background: var(--floresta); border-color: var(--floresta); color: #fff; }
+.btn.primario:hover { background: var(--floresta-2); border-color: var(--floresta-2); }
+.btn.primario:active { background: var(--floresta-3); }
+.btn.primario:disabled { background: #7fa398; border-color: #7fa398; color: #f2f7f4; }
+.btn.fantasma { background: transparent; border-color: rgb(234 243 238 / 35%); color: var(--sobre-floresta); }
+.btn.fantasma:hover { background: rgb(234 243 238 / 10%); border-color: var(--sobre-floresta); }
+.btn.fantasma:disabled { color: var(--sobre-floresta-2); border-color: rgb(234 243 238 / 18%); background: transparent; }
+
+/* ---------- Área de trabalho ---------- */
+main { padding: 32px 40px 48px; max-width: 1180px; width: 100%; }
+.topo { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.topo p { color: var(--tinta-2); margin-top: 6px; max-width: 62ch; font-size: 0.9375rem; }
+.acoes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acoes .pergunta { font-weight: 600; margin-right: 4px; }
+
+.aviso { display: grid; grid-template-columns: 16px 1fr; gap: 10px; margin-top: 20px; padding: 12px 14px;
+  border-radius: var(--raio); background: var(--barro-fundo); color: #7a2c18; border: 1px solid #e6b9aa; }
+.aviso svg { margin-top: 3px; }
+.aviso strong { display: block; color: #5f2010; }
+.aviso span { overflow-wrap: anywhere; }
+
+/* Etapas */
+.etapas { list-style: none; margin: 28px 0 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.etapas li { position: relative; padding-top: 30px; padding-right: 12px; font-size: 0.8125rem; line-height: 1.3; color: var(--tinta-2); }
+.etapas li::before { content: ""; position: absolute; top: 10px; left: 22px; right: 0; height: 2px;
+  background: var(--linha); transition: background-color 200ms var(--saida); }
+.etapas li:last-child::before { display: none; }
+.etapas .marca { position: absolute; top: 0; left: 0; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--papel); border: 2px solid var(--linha-2); color: var(--tinta-2);
+  transition: background-color 200ms var(--saida), border-color 200ms var(--saida), color 200ms var(--saida); }
+.etapas .marca svg { width: 12px; height: 12px; stroke-width: 2.5; }
+.etapas li[data-status="ok"] { color: var(--tinta); }
+.etapas li[data-status="ok"]::before { background: var(--broto); }
+.etapas li[data-status="ok"] .marca { background: var(--broto); border-color: var(--broto); color: #fff; }
+.etapas li[data-status="rodando"] { color: var(--ambar); font-weight: 600; }
+.etapas li[data-status="rodando"] .marca { border-color: var(--ambar); color: var(--ambar); background: var(--ambar-fundo); }
+.etapas li[data-status="falhou"] { color: var(--barro); font-weight: 600; }
+.etapas li[data-status="falhou"] .marca { background: var(--barro); border-color: var(--barro); color: #fff; }
+
+/* Painéis */
+.painel { margin-top: 36px; }
+.painel > header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.legenda { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.8125rem; color: var(--tinta-2); }
+.legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.legenda i { width: 14px; height: 10px; border-radius: 2px; }
+.cartao { background: var(--folha-papel); border: 1px solid var(--linha); border-radius: var(--raio); overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 12px 16px; text-align: left; vertical-align: middle; }
+thead th { font-size: 0.75rem; font-weight: 600; color: var(--tinta-2); border-bottom: 1px solid var(--linha); white-space: nowrap; }
+tbody tr + tr td { border-top: 1px solid var(--linha); }
+.num { text-align: right; }
+.vazio { color: var(--tinta-2); padding: 28px 16px; text-align: center; }
+
+/* O transplante: cada registro do legado termina em um dos três canteiros */
+.rota { display: flex; flex-direction: column; gap: 1px; white-space: nowrap; }
+.rota b { font-weight: 600; }
+.rota small { font: 0.75rem var(--mono); color: var(--tinta-2); }
+.canteiro { display: flex; height: 14px; min-width: 200px; border-radius: 3px; overflow: hidden; background: #dfe8e2; }
+.canteiro i { display: block; height: 100%; transition: flex-grow 400ms var(--saida); flex: 0 0 0; }
+.c-migrados { background: var(--broto); }
+.c-ja { background: var(--musgo); }
+.c-rejeitados { background: repeating-linear-gradient(135deg, var(--barro) 0 4px, #cf6a4f 4px 7px); }
+.conta { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-weight: 600; }
+.conta small { font-weight: 400; color: var(--tinta-2); font-size: 0.8125rem; }
+.conta.ok { color: var(--broto); }
+.conta.falha { color: var(--barro); }
+.conta.espera { color: var(--tinta-2); font-weight: 400; }
+
+/* Abas */
+.abas { display: flex; gap: 4px; border-bottom: 1px solid var(--linha); margin-bottom: 12px; }
+.abas button { font: 600 0.875rem/1 var(--sans); padding: 10px 12px; background: none; border: 0; color: var(--tinta-2);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; transition: color 150ms var(--saida); }
+.abas button:hover { color: var(--tinta); }
+.abas button[aria-selected="true"] { color: var(--floresta); border-bottom-color: var(--floresta); }
+.abas .qtd { margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--barro-fundo); color: #7a2c18; font-size: 0.75rem; }
+td.valor { font-family: var(--mono); font-size: 0.8125rem; overflow-wrap: anywhere; max-width: 28ch; }
+td.motivo { color: #7a2c18; }
+#log { margin: 0; padding: 14px 16px; font: 0.75rem/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere;
+  max-height: 340px; overflow-y: auto; color: var(--tinta); }
+
+/* ---------- Telas estreitas ---------- */
+@media (max-width: 900px) {
+  body { grid-template-columns: minmax(0, 1fr); }
+  .rail { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding-bottom: 12px; }
+  .rail img { width: 168px; }
+  .rail h2 { display: none; }
+  .rail section { flex: 1 1 260px; }
+  .bancos { margin: 0 0 8px; }
+  .rail footer { margin: 0; padding: 0 20px; }
+  main { padding: 24px 16px 40px; }
+  .etapas { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 8px; }
+  .etapas li { padding: 2px 0 2px 32px; min-height: 22px; }
+  .etapas li::before { display: none; }
+  .acoes { width: 100%; }
+  .acoes .btn { flex: 1 1 140px; min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; }
+  svg.gira { animation-duration: 2.4s; }
+}
+</style>
+</head>
+<body>
+
+<aside class="rail" aria-label="Conexões">
+  <img src="/logo.png" alt="EcoCiente. Dados que despertam a consciência" width="572" height="296">
+  <section>
+    <h2 id="titulo-bancos">Bancos de dados</h2>
+    <ul class="bancos" id="bancos" aria-labelledby="titulo-bancos" aria-live="polite"></ul>
+    <button class="btn fantasma" id="verificar" type="button">Verificar conexões</button>
+  </section>
+  <footer>
+    <button class="btn fantasma" id="encerrar" type="button">Encerrar programa</button>
+  </footer>
+</aside>
+
+<main>
+  <div class="topo">
+    <div>
+      <h1>Migração do legado</h1>
+      <p id="resumo" role="status" aria-live="polite">Carregando…</p>
+    </div>
+    <div class="acoes" id="acoes"></div>
+  </div>
+
+  <div class="aviso" id="aviso" role="alert" hidden></div>
+
+  <ol class="etapas" id="etapas" aria-label="Etapas da execução"></ol>
+
+  <section class="painel" aria-labelledby="titulo-tabelas">
+    <header>
+      <h2 id="titulo-tabelas">Do legado ao destino</h2>
+      <div class="legenda" aria-hidden="true">
+        <span><i class="c-migrados"></i>Migrados</span>
+        <span><i class="c-ja"></i>Já estavam no destino</span>
+        <span><i class="c-rejeitados"></i>Rejeitados</span>
+      </div>
+    </header>
+    <div class="cartao">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Tabela</th>
+            <th scope="col" class="num">No legado</th>
+            <th scope="col">Para onde foi cada registro</th>
+            <th scope="col" class="num">Migrados</th>
+            <th scope="col" class="num">Já no destino</th>
+            <th scope="col" class="num">Rejeitados</th>
+            <th scope="col">Conferência</th>
+          </tr>
+        </thead>
+        <tbody id="tabelas"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="painel" aria-label="Detalhes da execução">
+    <div class="abas" role="tablist">
+      <button role="tab" id="aba-rejeitados" aria-controls="painel-rejeitados" aria-selected="true" type="button">Rejeitados<span class="qtd" id="qtd-rejeitados" hidden></span></button>
+      <button role="tab" id="aba-log" aria-controls="painel-log" aria-selected="false" tabindex="-1" type="button">Log</button>
+    </div>
+    <div class="cartao" role="tabpanel" id="painel-rejeitados" aria-labelledby="aba-rejeitados">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Tabela</th>
+            <th scope="col" class="num">ID no legado</th>
+            <th scope="col">Campo</th>
+            <th scope="col">Valor</th>
+            <th scope="col">Motivo</th>
+          </tr>
+        </thead>
+        <tbody id="rejeitados"></tbody>
+      </table>
+    </div>
+    <div class="cartao" role="tabpanel" id="painel-log" aria-labelledby="aba-log" tabindex="0" hidden>
+      <pre id="log"></pre>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+// Tudo que vem do servidor entra por textContent: dados do banco nunca viram HTML.
+function el(tag, props = {}, ...filhos) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") node.className = v;
+    else if (k in node) node[k] = v;
+    else node.setAttribute(k, v);
+  }
+  node.append(...filhos.filter((f) => f != null));
+  return node;
+}
+
+const ICONES = {
+  check: "M3.5 8.5l3 3 6-7",
+  x: "M4 4l8 8M12 4l-8 8",
+  ponto: "M8 8h.01",
+  alerta: "M8 5v4M8 11.5h.01M8 1.5l6.5 12h-13z",
+  gira: "M8 1.5a6.5 6.5 0 1 1-6.5 6.5",
+};
+function icone(nome) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "ico" + (nome === "gira" ? " gira" : ""));
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", ICONES[nome]);
+  svg.append(path);
+  return svg;
+}
+
+const ETAPAS = ["Verificação dos bancos", "Extração", "Normalização", "Transformação", "Validação", "Carga", "Reconciliação"];
+const ICONE_ETAPA = { ok: "check", rodando: "gira", falhou: "x", pendente: "ponto" };
+const ROTULO_ETAPA = { ok: "concluída", rodando: "em andamento", falhou: "falhou", pendente: "pendente" };
+
+let estado = { config_erro: null, execucao: null, log: [] };
+let confirmando = false;
+let encerrado = false;
+let enviando = false;
+let pedidoSimular = true;
+const cache = {};
+
+// Só redesenha uma região quando os dados dela mudam (preserva foco e rolagem).
+function mudou(chave, valor) {
+  const json = JSON.stringify(valor);
+  if (cache[chave] === json) return false;
+  cache[chave] = json;
+  return true;
+}
+
+const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+const rodando = () => enviando || estado.execucao?.status === "RUNNING";
+
+function resumo() {
+  const ex = estado.execucao;
+  if (encerrado) return "Programa encerrado. Pode fechar esta aba.";
+  if (estado.config_erro) return "A ferramenta abriu, mas ainda não consegue falar com os bancos.";
+  if (!ex) return "Nenhuma execução ainda. Comece por Simular: roda todas as etapas e desfaz tudo no final, sem gravar nada.";
+  const etapa = ex.etapas.find((e) => e.status === "rodando");
+  if (ex.status === "RUNNING") return `${ex.simulacao ? "Simulando" : "Migrando"}… ${etapa ? etapa.nome : ""}`;
+  if (ex.status === "FAILED") return `${ex.simulacao ? "A simulação" : "A migração"} falhou. Nada foi gravado no destino.`;
+  const soma = (campo) => ex.tabelas.reduce((total, t) => total + (t[campo] || 0), 0);
+  const [m, j, r] = [soma("migrados"), soma("ja_migrados"), soma("rejeitados")];
+  const ja = j ? `, ${plural(j, "já estava", "já estavam")} no destino` : "";
+  return ex.simulacao
+    ? `Simulação concluída: ${plural(m, "registro entraria", "registros entrariam")}${ja}, ${plural(r, "seria rejeitado", "seriam rejeitados")}. Nada foi gravado.`
+    : `Migração gravada: ${plural(m, "registro migrado", "registros migrados")}${ja}, ${plural(r, "rejeitado", "rejeitados")}.`;
+}
+
+function desenharAcoes() {
+  const ocupado = rodando();
+  const bloqueado = ocupado || encerrado || !!estado.config_erro;
+  if (!mudou("acoes", [ocupado, bloqueado, confirmando, enviando, pedidoSimular, estado.execucao?.simulacao])) return;
+  const acoes = $("acoes");
+  if (confirmando && !bloqueado) {
+    const gravar = el("button", { class: "btn primario", type: "button", onclick: () => executar(false) }, "Gravar agora");
+    acoes.replaceChildren(
+      el("span", { class: "pergunta" }, "Gravar no banco destino?"),
+      el("button", { class: "btn", type: "button", onclick: () => { confirmando = false; desenhar(); $("migrar")?.focus(); } }, "Cancelar"),
+      gravar,
+    );
+    gravar.focus();
+    return;
+  }
+  const simulando = ocupado && (enviando ? pedidoSimular : estado.execucao?.simulacao);
+  const migrando = ocupado && !simulando;
+  acoes.replaceChildren(
+    el("button", { class: "btn", id: "simular", type: "button", disabled: bloqueado, onclick: () => executar(true) },
+      simulando ? icone("gira") : null, simulando ? "Simulando…" : "Simular"),
+    el("button", { class: "btn primario", id: "migrar", type: "button", disabled: bloqueado, onclick: () => { confirmando = true; desenhar(); } },
+      migrando ? icone("gira") : null, migrando ? "Migrando…" : "Migrar"),
+  );
+}
+
+function desenharAviso() {
+  const erro = estado.config_erro || (estado.execucao?.status === "FAILED" ? estado.execucao.erro : null);
+  if (!mudou("aviso", erro)) return;
+  const aviso = $("aviso");
+  aviso.hidden = !erro;
+  if (erro) aviso.replaceChildren(icone("alerta"),
+    el("div", {}, el("strong", {}, estado.config_erro ? "Falta configurar" : "O que aconteceu"), el("span", {}, erro)));
+}
+
+function desenharEtapas() {
+  const etapas = estado.execucao?.etapas ?? ETAPAS.map((nome) => ({ nome, status: "pendente" }));
+  if (!mudou("etapas", etapas)) return;
+  $("etapas").replaceChildren(...etapas.map((e) =>
+    el("li", { "data-status": e.status, "aria-current": e.status === "rodando" ? "step" : "false" },
+      el("span", { class: "marca" }, icone(ICONE_ETAPA[e.status])),
+      e.nome,
+      el("span", { class: "sr" }, ` (${ROTULO_ETAPA[e.status]})`))));
+}
+
+function linhaTabela(t) {
+  const carregou = t.status != null;
+  const n = (v) => (carregou ? String(v) : "–");
+  const total = Math.max(t.legado, 1);
+  const seg = (classe, valor, rotulo) => {
+    const i = el("i", { class: classe, title: `${rotulo}: ${valor}` });
+    i.style.flexGrow = carregou ? valor / total : 0;
+    return i;
+  };
+  const conta = !carregou
+    ? el("span", { class: "conta espera" }, "Aguardando a carga")
+    : t.status === "OK"
+      ? el("span", { class: "conta ok" }, icone("check"), "Fechou",
+          el("small", {}, `${t.legado} = ${t.migrados} + ${t.ja_migrados} + ${t.rejeitados}`))
+      : el("span", { class: "conta falha" }, icone("x"), "Não fechou",
+          el("small", {}, `${t.legado} ≠ ${t.migrados} + ${t.ja_migrados} + ${t.rejeitados}`));
+  return el("tr", {},
+    el("th", { scope: "row" }, el("span", { class: "rota" }, el("b", {}, t.tabela_legado), el("small", {}, `→ ${t.tabela_destino}`))),
+    el("td", { class: "num" }, String(t.legado)),
+    el("td", {}, el("div", { class: "canteiro", role: "img",
+      "aria-label": carregou ? `${t.migrados} migrados, ${t.ja_migrados} já no destino, ${t.rejeitados} rejeitados` : "Aguardando a carga" },
+      seg("c-migrados", t.migrados, "Migrados"), seg("c-ja", t.ja_migrados, "Já no destino"), seg("c-rejeitados", t.rejeitados, "Rejeitados"))),
+    el("td", { class: "num" }, n(t.migrados)),
+    el("td", { class: "num" }, n(t.ja_migrados)),
+    el("td", { class: "num" }, n(t.rejeitados)),
+    el("td", {}, conta));
+}
+
+function desenharTabelas() {
+  const tabelas = estado.execucao?.tabelas ?? [];
+  if (!mudou("tabelas", tabelas)) return;
+  $("tabelas").replaceChildren(...(tabelas.length
+    ? tabelas.map(linhaTabela)
+    : [el("tr", {}, el("td", { class: "vazio", colSpan: 7 },
+        "As tabelas aparecem aqui depois da extração: quantos registros havia no legado e para onde cada um foi."))]));
+}
+
+function desenharRejeitados() {
+  const lista = estado.execucao?.rejeitados ?? [];
+  if (!mudou("rejeitados", [lista, !!estado.execucao])) return;
+  const qtd = $("qtd-rejeitados");
+  qtd.hidden = !lista.length;
+  qtd.textContent = lista.length;
+  $("rejeitados").replaceChildren(...(lista.length
+    ? lista.map((r) => el("tr", {},
+        el("td", {}, r.entidade),
+        el("td", { class: "num" }, String(r.legacy_id ?? "–")),
+        el("td", {}, r.campo ?? "–"),
+        el("td", { class: "valor" }, r.campo ? (r.valor ?? "vazio") : "–"),
+        el("td", { class: "motivo" }, r.motivo)))
+    : [el("tr", {}, el("td", { class: "vazio", colSpan: 5 }, estado.execucao
+        ? "Nenhum registro rejeitado nesta execução."
+        : "Os registros que não puderem ser migrados aparecem aqui, cada um com o motivo."))]));
+}
+
+function desenharLog() {
+  if (!mudou("log", estado.log)) return;
+  const log = $("log");
+  const noFim = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
+  log.textContent = estado.log.length ? estado.log.join("\n") : "O log da execução aparece aqui.";
+  if (noFim) log.scrollTop = log.scrollHeight;
+}
+
+function desenhar() {
+  $("resumo").textContent = resumo();
+  $("verificar").disabled = encerrado;
+  $("encerrar").disabled = encerrado || rodando();
+  desenharAcoes();
+  desenharAviso();
+  desenharEtapas();
+  desenharTabelas();
+  desenharRejeitados();
+  desenharLog();
+}
+
+function desenharBancos(bancos) {
+  const lista = $("bancos");
+  if (!bancos || bancos.config_erro) {
+    lista.replaceChildren(el("li", {}, el("span", { class: "falha" }, icone("x")), el("strong", {}, "Sem configuração"),
+      el("span", { class: "erro" }, "Crie o arquivo .env para ver as conexões.")));
+    return;
+  }
+  lista.replaceChildren(...Object.entries(bancos).map(([nome, b]) =>
+    el("li", {},
+      el("span", { class: b.erro ? "falha" : "ok" }, icone(b.erro ? "x" : "check")),
+      el("strong", {}, `${nome[0].toUpperCase()}${nome.slice(1)}: ${b.erro ? "sem conexão" : "conectado"}`),
+      el("span", { class: "alvo" }, b.alvo),
+      b.erro ? el("span", { class: "erro" }, b.erro) : null)));
+}
+
+async function api(caminho, corpo) {
+  const resposta = await fetch(caminho, corpo === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo),
+  });
+  const dados = await resposta.json();
+  if (!resposta.ok) throw new Error(dados.erro || "Erro inesperado.");
+  return dados;
+}
+
+async function verificarBancos() {
+  const botao = $("verificar");
+  botao.disabled = true;
+  botao.replaceChildren(icone("gira"), "Verificando…");
+  try { desenharBancos(await api("/api/bancos")); } catch { /* o polling avisa se o programa caiu */ }
+  botao.replaceChildren("Verificar conexões");
+  botao.disabled = encerrado;
+}
+
+async function atualizar() {
+  if (encerrado) return;
+  try {
+    const antes = estado.execucao?.status;
+    estado = await api("/api/status");
+    if (antes === "RUNNING" && estado.execucao?.status !== "RUNNING") verificarBancos();
+  } catch {
+    encerrado = true;
+    desenharBancos(null);
+  }
+  desenhar();
+}
+
+async function executar(simular) {
+  confirmando = false;
+  pedidoSimular = simular;
+  enviando = true;
+  desenhar();
+  try {
+    await api("/api/executar", { simular });
+  } catch (erro) {
+    estado.config_erro = erro.message;
+  }
+  enviando = false;
+  await atualizar();
+}
+
+$("verificar").onclick = verificarBancos;
+$("encerrar").onclick = async () => {
+  try { await api("/api/encerrar", {}); encerrado = true; } catch (erro) { estado.config_erro = erro.message; }
+  desenhar();
+};
+
+// Abas: clique ou setas esquerda/direita.
+const abas = [...document.querySelectorAll('[role="tab"]')];
+function abrirAba(aba) {
+  for (const outra of abas) {
+    const ativa = outra === aba;
+    outra.setAttribute("aria-selected", ativa);
+    outra.tabIndex = ativa ? 0 : -1;
+    $(outra.getAttribute("aria-controls")).hidden = !ativa;
+  }
+  if (aba.id === "aba-log") $("log").scrollTop = $("log").scrollHeight;
+}
+abas.forEach((aba, i) => {
+  aba.onclick = () => abrirAba(aba);
+  aba.onkeydown = (e) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const proxima = abas[(i + (e.key === "ArrowRight" ? 1 : abas.length - 1)) % abas.length];
+    proxima.focus();
+    abrirAba(proxima);
+  };
+});
+
+desenhar();
+verificarBancos();
+atualizar();
+setInterval(atualizar, 1000);
+</script>
+</body>
+</html>
