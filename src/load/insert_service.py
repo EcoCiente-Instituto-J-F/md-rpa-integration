@@ -1,13 +1,14 @@
 """
 Carga no banco destino, dentro da transação aberta pelo orquestrador.
 
-A tabela de controle `migracao_id_map` guarda legado -> novo ID de tudo que já
-foi migrado. É ela que torna a carga idempotente: registro já mapeado não é
-inserido de novo.
+A tabela `tb_migracao_ids_map` (criada pelo schema do destino) guarda
+legado -> novo ID de tudo que já foi migrado. É ela que torna a carga
+idempotente: registro já mapeado não é inserido de novo. A coluna `entidade`
+recebe o nome no plural (usuarios, condominios...), como o schema documenta.
 """
 
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DataError, IntegrityError
 
 from config.logging_config import get_logger
 from entidades import ENTIDADES
@@ -15,15 +16,7 @@ from transform.validators import rejection
 
 logger = get_logger()
 
-CONTROLE_DDL = """
-    CREATE TABLE IF NOT EXISTS tb_migracao_ids_map (
-        entidade   text        NOT NULL,
-        legacy_id  bigint      NOT NULtL,
-        novo_id    bigint      NOT NULL,
-        migrado_em timestamptz NOT NULL DEFAULT now(),
-        PRIMARY KEY (entidade, legacy_id)
-    )
-"""
+_NOME_POR_DATASET = {e.dataset: e.nome for e in ENTIDADES}
 
 
 class InsertService:
@@ -33,15 +26,15 @@ class InsertService:
         self.stats = {}
 
     def _load_id_mapping(self, session):
-        session.execute(text(CONTROLE_DDL))
         mapping = self.data_mapper.id_mapping
         for ids in mapping.values():
             ids.clear()
         rows = session.execute(
-            text("SELECT entidade, legacy_id, novo_id FROM migracao_id_map")
+            text("SELECT entidade, legacy_id, novo_id FROM tb_migracao_ids_map")
         )
-        for entidade, legacy_id, novo_id in rows:
-            mapping.setdefault(entidade, {})[legacy_id] = novo_id
+        for dataset, legacy_id, novo_id in rows:
+            if dataset in _NOME_POR_DATASET:
+                mapping[_NOME_POR_DATASET[dataset]][legacy_id] = novo_id
 
     def _resolve_fks(self, entidade, record):
         """Preenche as FKs com os novos IDs. Rejeita o registro se o pai não migrou."""
@@ -59,6 +52,19 @@ class InsertService:
                 return False
             record[coluna] = novo_id
         return True
+
+    def _existing_id(self, entidade, record, session):
+        """Tabela de domínio: reaproveita a linha do destino com o mesmo nome."""
+        if not entidade.chave_natural:
+            return None
+        return session.execute(
+            text(
+                f"SELECT {entidade.pk_destino} FROM {entidade.tabela_destino} "
+                f"WHERE lower({entidade.chave_natural}) = lower(:valor) "
+                f"ORDER BY {entidade.pk_destino} LIMIT 1"
+            ),
+            {"valor": record[entidade.chave_natural]},
+        ).scalar()
 
     def insert(self, entidade, record, session):
         data = {k: v for k, v in record.items() if not k.startswith("legacy_")}
@@ -87,20 +93,23 @@ class InsertService:
                 try:
                     # SAVEPOINT: uma linha recusada pelo banco não aborta a transação.
                     with session.begin_nested():
-                        new_id = self.insert(entidade, record, session)
+                        new_id = self._existing_id(entidade, record, session)
+                        existia = new_id is not None
+                        if not existia:
+                            new_id = self.insert(entidade, record, session)
                         session.execute(
                             text(
-                                "INSERT INTO migracao_id_map "
+                                "INSERT INTO tb_migracao_ids_map "
                                 "(entidade, legacy_id, novo_id) "
                                 "VALUES (:entidade, :legacy_id, :novo_id)"
                             ),
                             {
-                                "entidade": entidade.nome,
+                                "entidade": entidade.dataset,
                                 "legacy_id": legacy_id,
                                 "novo_id": new_id,
                             },
                         )
-                except IntegrityError as error:
+                except (IntegrityError, DataError) as error:
                     motivo = str(error.orig).strip().splitlines()[0]
                     self.rejected.append(
                         rejection(
@@ -112,7 +121,8 @@ class InsertService:
                     )
                     continue
                 self.data_mapper.save_mapping(entidade.nome, legacy_id, new_id)
-                migrados += 1
+                ja_migrados += existia
+                migrados += not existia
 
             self.stats[entidade.nome] = {
                 "migrados": migrados,
