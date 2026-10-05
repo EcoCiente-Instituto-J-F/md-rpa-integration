@@ -1,479 +1,70 @@
-"""
-Validadores da migração.
-
-Responsável por:
-- Validar dados antes da carga
-- Bloquear registros inconsistentes
-- Garantir qualidade dos dados
-- Registrar problemas encontrados
-"""
-
+"""Validação: separa os registros que não podem ser carregados e diz por quê."""
 
 import re
 
 from config.logging_config import get_logger
-
-
+from entidades import ENTIDADES
 
 logger = get_logger()
 
+_EMAIL = re.compile(r"^[\w.+-]+@[\w-]+(\.[\w-]+)+$")
+
+
+def _digits(value, length):
+    return len(re.sub(r"\D", "", str(value))) == length
+
+
+# entidade -> [(campo, regra, motivo)]. A regra recebe o valor do campo.
+_OBRIGATORIO = (lambda value: value not in (None, ""), "Campo obrigatório vazio")
+RULES = {
+    "usuario": [
+        ("nome_usuario", *_OBRIGATORIO),
+        ("tipo_usuario_id", *_OBRIGATORIO),
+        ("email_usuario", lambda v: not v or bool(_EMAIL.match(v)), "E-mail inválido"),
+        ("cpf", lambda v: not v or _digits(v, 11), "CPF deve ter 11 dígitos"),
+    ],
+    "endereco": [
+        ("cidade", *_OBRIGATORIO),
+        ("cep", lambda v: not v or _digits(v, 8), "CEP deve ter 8 dígitos"),
+    ],
+    "sindico": [],
+    "condominio": [
+        ("nome_condominio", *_OBRIGATORIO),
+        ("cnpj", lambda v: not v or _digits(v, 14), "CNPJ deve ter 14 dígitos"),
+    ],
+}
+
+
+def rejection(entidade, record, campo, motivo):
+    """Formato único de registro rejeitado, usado na validação e na carga."""
+    return {
+        "entidade": entidade,
+        "legacy_id": record.get(f"legacy_{entidade}_id"),
+        "campo": campo,
+        "valor": None if record.get(campo) is None else str(record.get(campo)),
+        "motivo": motivo,
+    }
 
 
 class DataValidator:
-
-
-
     def __init__(self):
-
-
         self.errors = []
 
+    def validate(self, entidade, record):
+        failures = [
+            rejection(entidade, record, campo, motivo)
+            for campo, rule, motivo in RULES[entidade]
+            if not rule(record.get(campo))
+        ]
+        self.errors.extend(failures)
+        return not failures
 
-
-    # =====================================================
-    # REGISTRAR ERRO
-    # =====================================================
-
-    def add_error(
-        self,
-        entity,
-        field,
-        value,
-        message
-    ):
-
-
-        error = {
-
-
-            "entity":
-                entity,
-
-
-            "field":
-                field,
-
-
-            "value":
-                value,
-
-
-            "message":
-                message
-
+    def validate_dataset(self, dataset):
+        valid = {
+            e.dataset: [
+                r for r in dataset.get(e.dataset, []) if self.validate(e.nome, r)
+            ]
+            for e in ENTIDADES
         }
-
-
-        self.errors.append(
-            error
-        )
-
-
-        logger.warning(
-
-            f"Validação falhou: "
-            f"{entity}.{field} - {message}"
-
-        )
-
-
-
-    # =====================================================
-    # VALIDAR CAMPO OBRIGATÓRIO
-    # =====================================================
-
-    def required(
-        self,
-        entity,
-        field,
-        value
-    ):
-
-
-        if value is None or value == "":
-
-
-            self.add_error(
-
-                entity,
-
-                field,
-
-                value,
-
-                "Campo obrigatório vazio"
-
-            )
-
-
-            return False
-
-
-
-        return True
-
-
-
-    # =====================================================
-    # VALIDAR EMAIL
-    # =====================================================
-
-    def validate_email(
-        self,
-        email
-    ):
-
-
-        if not email:
-
-            return False
-
-
-
-        pattern = (
-
-            r"^[\w\.-]+@[\w\.-]+\.\w+$"
-
-        )
-
-
-
-        return bool(
-
-            re.match(
-                pattern,
-                email
-            )
-
-        )
-
-
-
-    # =====================================================
-    # VALIDAR CPF
-    # =====================================================
-
-    def validate_cpf(
-        self,
-        cpf
-    ):
-
-
-        if not cpf:
-
-            return False
-
-
-
-        cpf = re.sub(
-
-            r"\D",
-
-            "",
-
-            str(cpf)
-
-        )
-
-
-
-        return len(cpf) == 11
-
-
-
-    # =====================================================
-    # VALIDAR CNPJ
-    # =====================================================
-
-    def validate_cnpj(
-        self,
-        cnpj
-    ):
-
-
-        if not cnpj:
-
-            return False
-
-
-
-        cnpj = re.sub(
-
-            r"\D",
-
-            "",
-
-            str(cnpj)
-
-        )
-
-
-
-        return len(cnpj) == 14
-
-
-
-    # =====================================================
-    # VALIDAR CEP
-    # =====================================================
-
-    def validate_cep(
-        self,
-        cep
-    ):
-
-
-        if not cep:
-
-            return False
-
-
-
-        cep = re.sub(
-
-            r"\D",
-
-            "",
-
-            str(cep)
-
-        )
-
-
-
-        return len(cep) == 8
-
-
-
-    # =====================================================
-    # VALIDAR USUÁRIO
-    # =====================================================
-
-    def validate_usuario(
-        self,
-        usuario
-    ):
-
-
-        valid = True
-
-
-
-        if not self.required(
-
-            "usuario",
-
-            "nome_usuario",
-
-            usuario.get("nome_usuario")
-
-        ):
-
-            valid = False
-
-
-
-        email = usuario.get(
-            "email_usuario"
-        )
-
-
-
-        if email and not self.validate_email(email):
-
-
-            self.add_error(
-
-                "usuario",
-
-                "email",
-
-                email,
-
-                "Email inválido"
-
-            )
-
-
-            valid = False
-
-
-
-        cpf = usuario.get(
-            "cpf"
-        )
-
-
-
-        if cpf and not self.validate_cpf(cpf):
-
-
-            self.add_error(
-
-                "usuario",
-
-                "cpf",
-
-                cpf,
-
-                "CPF inválido"
-
-            )
-
-
-            valid = False
-
-
-
+        logger.info(f"Validação finalizada. Rejeições: {len(self.errors)}")
         return valid
-
-
-
-    # =====================================================
-    # VALIDAR ENDEREÇO
-    # =====================================================
-
-    def validate_endereco(
-        self,
-        endereco
-    ):
-
-
-        valid = True
-
-
-
-        if not self.required(
-
-            "endereco",
-
-            "cidade",
-
-            endereco.get("cidade")
-
-        ):
-
-            valid = False
-
-
-
-        cep = endereco.get(
-            "cep"
-        )
-
-
-
-        if cep and not self.validate_cep(cep):
-
-
-            self.add_error(
-
-                "endereco",
-
-                "cep",
-
-                cep,
-
-                "CEP inválido"
-
-            )
-
-
-            valid = False
-
-
-
-        return valid
-
-
-
-    # =====================================================
-    # VALIDAR DATASET COMPLETO
-    # =====================================================
-
-    def validate_dataset(
-        self,
-        dataset
-    ):
-
-
-        logger.info(
-
-            "Iniciando validação dos dados"
-
-        )
-
-
-        valid_records = {}
-
-
-
-        if "usuarios" in dataset:
-
-
-            valid_records["usuarios"] = []
-
-
-
-            for usuario in dataset["usuarios"]:
-
-
-                if self.validate_usuario(usuario):
-
-
-                    valid_records["usuarios"].append(
-
-                        usuario
-
-                    )
-
-
-
-        if "enderecos" in dataset:
-
-
-            valid_records["enderecos"] = []
-
-
-
-            for endereco in dataset["enderecos"]:
-
-
-                if self.validate_endereco(endereco):
-
-
-                    valid_records["enderecos"].append(
-
-                        endereco
-
-                    )
-
-
-
-        if "sindicos" in dataset:
-
-            valid_records["sindicos"] = list(
-                dataset["sindicos"]
-            )
-
-
-        logger.info(
-
-            f"Validação finalizada. "
-            f"Erros encontrados: {len(self.errors)}"
-
-        )
-
-
-        return valid_records
-
-
-
-    # =====================================================
-    # RETORNAR ERROS
-    # =====================================================
-
-    def get_errors(self):
-
-
-        return self.errors
