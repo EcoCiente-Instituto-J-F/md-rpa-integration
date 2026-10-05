@@ -1,421 +1,59 @@
 """
-Reconciliação da migração.
+Reconciliação: confere legado x destino antes do COMMIT.
 
-Responsável por:
-- Comparar origem e destino
-- Identificar divergências
-- Validar integridade da carga
-- Gerar relatório de conferência
+Para cada entidade a conta tem de fechar:
+    registros no legado = migrados + já migrados + rejeitados
+e todo ID mapeado tem de existir no destino.
 """
-
-
-from datetime import datetime
 
 from sqlalchemy import text
 
 from config.logging_config import get_logger
-from load.primary_keys import PRIMARY_KEYS
-
-
+from entidades import ENTIDADES
 
 logger = get_logger()
 
 
-
 class Reconciliation:
-
-
-
-    def __init__(
-        self,
-        legacy_engine,
-        target_engine
-    ):
-
+    def __init__(self, legacy_engine):
         self.legacy_engine = legacy_engine
 
-        self.target_engine = target_engine
-
-
-        self.results = []
-
-
-
-    # =====================================================
-    # CONTAR REGISTROS
-    # =====================================================
-
-    def count_records(
-        self,
-        engine,
-        table
-    ):
-
-
-        query = text(
-            f"""
-            SELECT COUNT(*)
-            FROM {table}
-            """
-        )
-
-
-        with engine.connect() as connection:
-
-
-            result = connection.execute(
-                query
-            )
-
-
-            return result.scalar()
-
-
-
-    # =====================================================
-    # COMPARAR TABELA
-    # =====================================================
-
-    def compare_table(
-        self,
-        legacy_table,
-        target_table
-    ):
-
-
-        logger.info(
-
-            f"Iniciando reconciliação "
-            f"{legacy_table} -> {target_table}"
-
-        )
-
-
-
-        try:
-
-
-            legacy_count = self.count_records(
-
-                self.legacy_engine,
-
-                legacy_table
-
-            )
-
-
-
-            target_count = self.count_records(
-
-                self.target_engine,
-
-                target_table
-
-            )
-
-
-
-            difference = (
-
-                legacy_count -
-
-                target_count
-
-            )
-
-
-
-            status = (
-
-                "OK"
-
-                if difference == 0
-
-                else
-
-                "DIVERGENCIA"
-
-            )
-
-
-
-            result = {
-
-
-                "source_table":
-
-                    legacy_table,
-
-
-                "target_table":
-
-                    target_table,
-
-
-                "source_count":
-
-                    legacy_count,
-
-
-                "target_count":
-
-                    target_count,
-
-
-                "difference":
-
-                    difference,
-
-
-                "status":
-
-                    status,
-
-
-                "checked_at":
-
-                    datetime.now()
-
-            }
-
-
-
-            self.results.append(
-                result
-            )
-
-
-
-            if status == "OK":
-
-
-                logger.info(
-
-                    f"Tabela validada: {legacy_table}"
-
+    def run(self, session, id_mapping, stats, rejected):
+        results = []
+        with self.legacy_engine.connect() as legacy:
+            for entidade in ENTIDADES:
+                legado = legacy.execute(
+                    text(f"SELECT COUNT(*) FROM {entidade.tabela_legado}")
+                ).scalar()
+                new_ids = list(id_mapping[entidade.nome].values())
+                no_destino = session.execute(
+                    text(
+                        f"SELECT COUNT(*) FROM {entidade.tabela_destino} "
+                        f"WHERE {entidade.pk_destino} = ANY(:ids)"
+                    ),
+                    {"ids": new_ids},
+                ).scalar()
+                rejeitados = len(
+                    {r["legacy_id"] for r in rejected if r["entidade"] == entidade.nome}
                 )
-
-
-            else:
-
-
-                logger.error(
-
-                    f"Divergência encontrada: "
-                    f"{legacy_table}"
-
+                fechou = legado == len(new_ids) + rejeitados and no_destino == len(
+                    new_ids
                 )
-
-
-
-            return result
-
-
-
-        except Exception as error:
-
-
-            logger.error(
-
-                f"Erro reconciliação {legacy_table}: {error}"
-
-            )
-
-
-            raise
-
-
-
-    # =====================================================
-    # COMPARAR SOMENTE O QUE FOI MIGRADO NESTA EXECUÇÃO
-    # =====================================================
-
-    def compare_migrated(
-        self,
-        legacy_table,
-        target_table,
-        new_ids
-    ):
-        """
-        O destino pode já ter dados de outras origens,
-        então compara o legado com os IDs criados
-        nesta execução (id_mapping), e não com o
-        COUNT(*) total da tabela destino.
-        """
-
-        logger.info(
-            f"Iniciando reconciliação "
-            f"{legacy_table} -> {target_table}"
-        )
-
-        primary_key = PRIMARY_KEYS[target_table]
-
-        legacy_count = self.count_records(
-            self.legacy_engine,
-            legacy_table
-        )
-
-        new_ids = list(new_ids)
-
-        query = text(
-            f"""
-            SELECT COUNT(*)
-            FROM {target_table}
-            WHERE {primary_key} = ANY(:ids)
-            """
-        )
-
-        with self.target_engine.connect() as connection:
-
-            target_count = connection.execute(
-                query,
-                {"ids": new_ids}
-            ).scalar()
-
-        difference = legacy_count - target_count
-
-        status = (
-            "OK"
-            if difference == 0
-            else "DIVERGENCIA"
-        )
-
-        result = {
-            "source_table": legacy_table,
-            "target_table": target_table,
-            "source_count": legacy_count,
-            "target_count": target_count,
-            "difference": difference,
-            "status": status,
-            "checked_at": datetime.now()
-        }
-
-        self.results.append(result)
-
-        if status == "OK":
-            logger.info(
-                f"Tabela validada: {legacy_table}"
-            )
-        else:
-            logger.error(
-                f"Divergência encontrada: "
-                f"{legacy_table}"
-            )
-
-        return result
-
-    # =====================================================
-    # RECONCILIAÇÃO COMPLETA
-    # =====================================================
-
-    def run(
-        self,
-        mappings,
-        id_mapping=None
-    ):
-
-
-        """
-        Exemplo:
-
-        mappings = {
-
-            "usuario":
-            "usuario",
-
-            "material":
-            "material"
-
-        }
-
-        """
-
-
-        logger.info(
-
-            "===== INÍCIO RECONCILIAÇÃO ====="
-
-        )
-
-
-
-        for legacy, target in mappings.items():
-
-            if id_mapping is not None and legacy in id_mapping:
-
-                self.compare_migrated(
-                    legacy,
-                    target,
-                    id_mapping[legacy].values()
+                results.append(
+                    {
+                        "entidade": entidade.nome,
+                        "tabela_legado": entidade.tabela_legado,
+                        "tabela_destino": entidade.tabela_destino,
+                        "legado": legado,
+                        **stats[entidade.nome],
+                        "rejeitados": rejeitados,
+                        "no_destino": no_destino,
+                        "status": "OK" if fechou else "DIVERGENCIA",
+                    }
                 )
-
-            else:
-
-                self.compare_table(
-                    legacy,
-                    target
+                log = logger.info if fechou else logger.error
+                log(
+                    f"Reconciliação {entidade.tabela_legado} -> "
+                    f"{entidade.tabela_destino}: {results[-1]['status']}"
                 )
-
-
-
-        logger.info(
-
-            "===== FIM RECONCILIAÇÃO ====="
-
-        )
-
-
-        return self.results
-
-    
-
-    # =====================================================
-    # RELATÓRIO FINAL
-    # =====================================================
-
-    def report(self):
-
-
-        total = len(
-            self.results
-        )
-
-
-        success = len(
-
-            [
-
-                item
-
-                for item in self.results
-
-                if item["status"] == "OK"
-
-            ]
-
-        )
-
-
-        return {
-
-
-            "tables_checked":
-
-                total,
-
-
-            "success":
-
-                success,
-
-
-            "failed":
-
-                total - success,
-
-
-            "results":
-
-                self.results
-
-        }
+        return results
