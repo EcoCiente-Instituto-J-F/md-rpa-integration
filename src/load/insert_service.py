@@ -16,9 +16,9 @@ from transform.validators import rejection
 logger = get_logger()
 
 CONTROLE_DDL = """
-    CREATE TABLE IF NOT EXISTS migracao_id_map (
+    CREATE TABLE IF NOT EXISTS tb_migracao_ids_map (
         entidade   text        NOT NULL,
-        legacy_id  bigint      NOT NULL,
+        legacy_id  bigint      NOT NULtL,
         novo_id    bigint      NOT NULL,
         migrado_em timestamptz NOT NULL DEFAULT now(),
         PRIMARY KEY (entidade, legacy_id)
