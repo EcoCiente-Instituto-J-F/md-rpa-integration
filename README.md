@@ -35,18 +35,18 @@ flowchart LR
 ### Estado atual
 
 - [x] Interface local com simulação, migração, rejeitados e log
-- [x] Carga de `tb_enderecos`, `tb_usuarios`, `tb_sindicos` e `tb_condominios`
+- [x] Carga de tipos de usuário e de condomínio, endereços, usuários, telefones, síndicos, condomínios, torres, moradores e cooperativas
 - [x] Registro inválido ou órfão é rejeitado com motivo, sem derrubar a execução
 - [x] Carga idempotente (rodar duas vezes não duplica)
 - [x] Reconciliação dentro da transação
 - [x] Execução via Docker
-- [ ] CPF e mandato do síndico, telefones, moradores e cooperativas (dependem do schema de destino, que não está neste repositório)
+- [ ] Materiais, coletas, parcerias, postagens, conteúdos, quizzes e pontuação (ver "O que não é migrado")
 
 ## Pré-requisitos
 
 - Python `3.12` ou superior
 - PostgreSQL `16` (pode subir via Docker Compose)
-- O schema do banco de destino aplicado (`ecociente_schema.sql`) e o banco legado populado
+- O schema do destino aplicado (`sql/ecociente_schema.sql`) e o banco legado populado (modelo em `docs/banco-legado-er.png`)
 
 ## Usando
 
@@ -101,7 +101,7 @@ docker compose run --rm migration_rpa                  # migração pela linha d
 pytest
 ```
 
-Os testes nunca usam os bancos do `.env`. O teste de ponta a ponta só roda quando dois bancos descartáveis são indicados (ele **apaga e recria** as tabelas neles):
+Os testes nunca usam os bancos do `.env`. O teste de ponta a ponta aplica o schema oficial e só roda quando dois bancos descartáveis são indicados (ele **apaga tudo** neles):
 
 ```bash
 TEST_LEGACY_URL=postgresql://... TEST_TARGET_URL=postgresql://... pytest
@@ -133,16 +133,43 @@ Erros de estrutura, como coluna inexistente, abortam a execução e nada é grav
 
 ### Idempotência
 
-A carga cria no destino a tabela de controle `migracao_id_map (entidade, legacy_id, novo_id)`. Registro que já está nela não é inserido de novo, então repetir a migração só leva o que faltava.
+A carga usa a tabela `tb_migracao_ids_map (entidade, legacy_id, novo_id)`, criada pelo schema do destino. Registro que já está nela não é inserido de novo, então repetir a migração só leva o que faltava.
 
-Se linhas migradas forem apagadas do destino, a reconciliação acusa a divergência. Apague também as linhas correspondentes de `migracao_id_map` para migrá-las outra vez.
+Se linhas migradas forem apagadas do destino, a reconciliação acusa a divergência. Apague também as linhas correspondentes de `tb_migracao_ids_map` para migrá-las outra vez.
+
+### De onde vem cada tabela
+
+| Legado | Destino | Observação |
+| --- | --- | --- |
+| `tipo_usuario` | `tb_lkp_tipos_usuarios` | Tipo com o mesmo nome já existente no destino é reaproveitado |
+| `tipo_condominio` | `tb_lkp_tipos_condominios` | Idem |
+| `endereco` | `tb_enderecos` | `rua` vira `logradouro` |
+| `usuario` | `tb_usuarios` | `cpf` vem do síndico; `senha_hash` vira `MIGRACAO_TEMP` |
+| `telefone_usuario` | `tb_telefones` | `numero` vira `numero_contato`, só dígitos |
+| `sindico` | `tb_sindicos` | Datas de mandato não têm coluna no destino |
+| `condominio` | `tb_condominios` | `token` vira `codigo_acesso`; `status` vira `ativo`; recebe o `sindico_id` |
+| `torre` | `tb_torres` | `numero_unidades` não tem coluna no destino |
+| `morador` | `tb_moradores` | O condomínio vem da torre; apartamento e engajamento não têm coluna |
+| `cooperativa` | `tb_cooperativas` | Nome e e-mail vêm do usuário da cooperativa |
+
+### O que não é migrado
+
+Estas tabelas do legado não têm correspondência direta e pedem decisão de negócio antes:
+
+- `categoria_material` e `material`: o destino só tem `tb_lkp_categorias_residuos`, com pontuação por categoria.
+- `postagem`: `tb_postagens` exige categoria, `hash_foto` e `capturada_em`, que o legado não guarda.
+- `coleta` e `parceria`: o destino separa em agendamentos, visitas e avaliações, com status em tabela de domínio.
+- `conteudo_educativo`, `quiz`, `resultado_quiz` e `progresso_conteudo`: o destino organiza em cursos, aulas, quizzes e tentativas.
+- `pontuacao`: no destino os pontos são um razão (`tb_movimentacoes_pontos`) validado por trigger.
+- `tb_rel_usuarios_condominios` (vínculo com nível de confiança) não é criado para os moradores migrados.
 
 ### Decisões que valem conferir
 
-- **Senha**: o legado não tem senha. Todo usuário entra com `senha_hash = 'MIGRACAO_TEMP'` e precisa redefinir no primeiro acesso.
-- **Status do usuário**: `status` vazio no legado entra como ativo. Texto é comparado sem diferenciar maiúsculas com `sim`, `s`, `true`, `t`, `1`, `ativo` e `a`; ajuste a lista em `normalization.py` se o legado usar outro valor.
+- **Senha**: `usuario.senha_hash` no legado é `INTEGER`, não um hash utilizável. Todo usuário entra com `senha_hash = 'MIGRACAO_TEMP'` e precisa redefinir no primeiro acesso.
+- **Status vazio**: usuário ou condomínio com `status` nulo entra como ativo.
 - **Síndico do condomínio**: no legado o síndico aponta para o condomínio; no destino é o inverso. Com mais de um síndico por condomínio, vale o de maior ID.
-- **Colunas de `tb_condominios`**: vêm do `data_mapper` (`nome_condominio`, `cnpj`, `endereco_id`, `sindico_id`) e não foram conferidas com o schema oficial.
+- **Morador sem torre** é rejeitado, porque o destino exige o condomínio.
+- **Estado** precisa ter 2 letras (`CHAR(2)`); "São Paulo" por extenso é recusado pelo banco e o endereço é rejeitado.
 
 ### Logs
 
@@ -165,6 +192,8 @@ md-rpa-integration/
 │   ├── load/                    # insert_service
 │   ├── rpa/                     # orchestrator
 │   └── audit/                   # migration_log, reconciliation
+├── sql/ecociente_schema.sql     # schema oficial do destino
+├── docs/banco-legado-er.png     # modelo do banco legado
 ├── test/                        # pytest (unidade e ponta a ponta)
 ├── assets/                      # logo e ícone
 ├── scripts/pr-bot/              # geração automática de PR

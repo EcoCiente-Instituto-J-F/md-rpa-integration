@@ -36,8 +36,9 @@ class Reconciliation:
                 rejeitados = len(
                     {r["legacy_id"] for r in rejected if r["entidade"] == entidade.nome}
                 )
+                # set(): duas linhas do legado podem cair na mesma linha de domínio.
                 fechou = legado == len(new_ids) + rejeitados and no_destino == len(
-                    new_ids
+                    set(new_ids)
                 )
                 results.append(
                     {
