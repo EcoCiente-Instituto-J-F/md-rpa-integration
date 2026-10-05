@@ -59,3 +59,16 @@ def test_validacao_rejeita_e_explica():
             "motivo": "E-mail inválido",
         }
     ]
+
+
+def test_cpf_do_sindico_vai_para_o_usuario():
+    out = DataMapper().transform_dataset(
+        {
+            "usuarios": [{"legacy_usuario_id": 1, "nome": "Ana"}],
+            "sindicos": [
+                {"legacy_sindico_id": 5, "legacy_usuario_id": 1, "cpf": "11122233344"}
+            ],
+        }
+    )
+    assert out["usuarios"][0]["cpf"] == "11122233344"
+    assert out["sindicos"] == [{"legacy_sindico_id": 5, "legacy_usuario_id": 1}]

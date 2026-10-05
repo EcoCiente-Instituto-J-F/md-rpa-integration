@@ -21,12 +21,14 @@ def test_normalize_boolean_aceita_texto_do_legado():
     assert n.normalize_boolean(None) is None
 
 
-def test_dataset_nao_descarta_condominios_nem_sindicos():
+def test_dataset_nao_descarta_o_que_nao_normaliza():
     out = n.normalize_dataset(
         {
             "condominios": [{"nome": " Vila  Verde ", "cnpj": "12.345.678/0001-90"}],
-            "sindicos": [{"legacy_sindico_id": 1}],
+            "sindicos": [{"legacy_sindico_id": 1, "cpf": "111.222.333-44"}],
+            "moradores": [{"legacy_morador_id": 1}],
         }
     )
     assert out["condominios"] == [{"nome": "Vila Verde", "cnpj": "12345678000190"}]
-    assert out["sindicos"] == [{"legacy_sindico_id": 1}]
+    assert out["sindicos"] == [{"legacy_sindico_id": 1, "cpf": "11122233344"}]
+    assert out["moradores"] == [{"legacy_morador_id": 1}]
