@@ -68,7 +68,7 @@ class MigrationOrchestrator:
                         f"A reconciliação não fechou em {', '.join(divergentes)}. "
                         "Nada foi gravado. Se linhas migradas foram apagadas do "
                         "destino, apague também as linhas correspondentes de "
-                        "migracao_id_map."
+                        "tb_migracao_ids_map."
                     )
 
             if self.dry_run:
