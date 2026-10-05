@@ -38,6 +38,12 @@ def _backend():
         from config.database import database_health_check
         from config.logging_config import memory_log
         from rpa.orchestrator import MigrationOrchestrator
+    except ModuleNotFoundError as error:
+        return None, (
+            f"Dependência ausente: {error.name}. Rode "
+            ".venv\\Scripts\\python -m pip install -r requirements.txt "
+            "(ou abra pelo EcoCiente.bat, que faz isso sozinho)."
+        )
     except Exception as error:
         faltando = [str(e["loc"][0]) for e in getattr(error, "errors", lambda: [])()]
         detalhe = f"defina {', '.join(faltando)}" if faltando else str(error)
