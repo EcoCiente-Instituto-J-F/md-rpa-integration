@@ -1,138 +1,45 @@
-"""
-Configuração centralizada de logs.
-
-Responsável por:
-- Padronizar formato dos logs
-- Criar arquivos de auditoria
-- Separar logs gerais e erros
-- Permitir rastreabilidade da migração
-"""
+"""Logging: migration.log, errors.log, console e memória (para a interface)."""
 
 import logging
-from pathlib import Path
+import sys
+from collections import deque
 
 from config.settings import settings
 
+settings.LOG_PATH.mkdir(parents=True, exist_ok=True)
+
+memory_log = deque(maxlen=500)
 
 
-# =====================================================
-# CRIAÇÃO DOS DIRETÓRIOS
-# =====================================================
-
-settings.LOG_PATH.mkdir(
-    parents=True,
-    exist_ok=True
-)
+class _MemoryHandler(logging.Handler):
+    def emit(self, record):
+        memory_log.append(self.format(record))
 
 
+def _build_logger():
+    logger = logging.getLogger("migration_rpa")
+    if logger.handlers:
+        return logger
 
-# =====================================================
-# FORMATO DO LOG
-# =====================================================
+    logger.setLevel(settings.LOG_LEVEL.upper())
+    logger.propagate = False
 
-LOG_FORMAT = (
-    "%(asctime)s | "
-    "%(filename)s | "
-    "%(levelname)s | "
-    "%(message)s"
-)
+    general = logging.FileHandler(settings.LOG_PATH / "migration.log", encoding="utf-8")
+    errors = logging.FileHandler(settings.LOG_PATH / "errors.log", encoding="utf-8")
+    errors.setLevel(logging.ERROR)
+    handlers = [general, errors, _MemoryHandler()]
+    if sys.stderr:  # executável sem console não tem stderr
+        handlers.append(logging.StreamHandler())
 
-
-DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
-
-
-
-# =====================================================
-# FORMATTER
-# =====================================================
-
-formatter = logging.Formatter(
-    fmt=LOG_FORMAT,
-    datefmt=DATE_FORMAT
-)
-
-
-
-# =====================================================
-# HANDLER LOG GERAL
-# =====================================================
-
-general_handler = logging.FileHandler(
-    settings.LOG_PATH / "migration.log",
-    encoding="utf-8"
-)
-
-
-general_handler.setFormatter(
-    formatter
-)
-
-
-general_handler.setLevel(
-    logging.INFO
-)
-
-
-
-# =====================================================
-# HANDLER SOMENTE ERROS
-# =====================================================
-
-error_handler = logging.FileHandler(
-    settings.LOG_PATH / "errors.log",
-    encoding="utf-8"
-)
-
-
-error_handler.setFormatter(
-    formatter
-)
-
-
-error_handler.setLevel(
-    logging.ERROR
-)
-
-
-
-# =====================================================
-# LOGGER PRINCIPAL
-# =====================================================
-
-logger = logging.getLogger(
-    "migration_rpa"
-)
-
-
-logger.setLevel(
-    logging.INFO
-)
-
-
-
-# Evita duplicar logs
-logger.propagate = False
-
-
-
-# Adiciona handlers apenas uma vez
-
-if not logger.handlers:
-
-    logger.addHandler(
-        general_handler
+    formatter = logging.Formatter(
+        "%(asctime)s | %(filename)s | %(levelname)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
+    for handler in handlers:
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    return logger
 
-    logger.addHandler(
-        error_handler
-    )
-
-
-
-# =====================================================
-# FUNÇÃO PARA OBTER LOGGER
-# =====================================================
 
 def get_logger():
-
-    return logger
+    return _build_logger()

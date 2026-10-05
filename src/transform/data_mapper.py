@@ -1,572 +1,145 @@
 """
-Data Mapper da migração.
+Data Mapper: converte o modelo legado no modelo normalizado e guarda o mapa
+de IDs legado -> novo.
 
-Responsável por:
-
-- Converter modelo legado para modelo normalizado
-- Mapear campos antigos para novos campos
-- Controlar relacionamento entre IDs
-- Preparar payloads para carga no banco destino
+Os campos `legacy_*` seguem no registro até a carga, que os usa para resolver
+as chaves estrangeiras e os remove antes do INSERT.
 """
 
 from datetime import datetime
 
 from config.logging_config import get_logger
-
+from entidades import ENTIDADES
 
 logger = get_logger()
 
 
+def _ativo(value):
+    return True if value is None else value
+
+
+def _legacy(record, *entidades):
+    return {f"legacy_{e}_id": record.get(f"legacy_{e}_id") for e in entidades}
+
+
 class DataMapper:
-
     def __init__(self):
+        self.id_mapping = {entidade.nome: {} for entidade in ENTIDADES}
 
-        # Controle interno de relacionamento
-        # Legado -> Novo
-        self.id_mapping = {
-
-            "usuario": {},
-
-            "endereco": {},
-
-            "sindico": {},
-
-            "condominio": {},
-
-            "cooperativa": {},
-
-            "material": {},
-
-            "conteudo": {}
-
+    def map_tipo(self, tipo, entidade):
+        return {
+            "nome_tipo": tipo.get("nome_tipo"),
+            "descricao": tipo.get("descricao"),
+            **_legacy(tipo, entidade),
         }
 
+    def map_tipo_usuario(self, tipo):
+        return self.map_tipo(tipo, "tipo_usuario")
 
-    # =====================================================
-    # USUÁRIO
-    # =====================================================
+    def map_tipo_condominio(self, tipo):
+        return self.map_tipo(tipo, "tipo_condominio")
 
-    def map_usuario(
-        self,
-        usuario
-    ):
+    def map_endereco(self, endereco):
+        numero = endereco.get("numero")
+        return {
+            "logradouro": endereco.get("logradouro"),
+            "numero": None if numero is None else str(numero),
+            "bairro": endereco.get("bairro"),
+            "cidade": endereco.get("cidade"),
+            "estado": endereco.get("estado"),
+            "cep": endereco.get("cep"),
+            "complemento": endereco.get("complemento"),
+            **_legacy(endereco, "endereco"),
+        }
 
-        try:
+    def map_usuario(self, usuario):
+        return {
+            "nome_usuario": usuario.get("nome"),
+            "email_usuario": usuario.get("email"),
+            # O senha_hash do legado é INTEGER, não é um hash utilizável:
+            # o usuário redefine a senha no primeiro acesso.
+            "senha_hash": "MIGRACAO_TEMP",
+            "cpf": usuario.get("cpf"),
+            "ativo": _ativo(usuario.get("ativo")),
+            "registro_em": usuario.get("data_cadastro") or datetime.now(),
+            **_legacy(usuario, "usuario", "tipo_usuario", "endereco"),
+        }
 
-            mapped = {
+    def map_telefone(self, telefone):
+        return {
+            "numero_contato": telefone.get("numero"),
+            **_legacy(telefone, "telefone", "usuario"),
+        }
 
-                "nome_usuario":
+    def map_sindico(self, sindico):
+        return _legacy(sindico, "sindico", "usuario")
 
-                    usuario.get("nome"),
+    def map_condominio(self, condominio):
+        return {
+            "nome_condominio": condominio.get("nome"),
+            "cnpj": condominio.get("cnpj"),
+            "codigo_acesso": condominio.get("token"),
+            "ativo": _ativo(condominio.get("ativo")),
+            **_legacy(
+                condominio, "condominio", "tipo_condominio", "endereco", "sindico"
+            ),
+        }
 
+    def map_torre(self, torre):
+        return {
+            "nome_torre": torre.get("nome"),
+            **_legacy(torre, "torre", "condominio"),
+        }
 
-                "email_usuario":
+    def map_morador(self, morador):
+        return _legacy(morador, "morador", "usuario", "condominio")
 
-                    usuario.get("email"),
+    def map_cooperativa(self, cooperativa):
+        return {
+            "cnpj_cooperativa": cooperativa.get("cnpj"),
+            "nome_cooperativa": cooperativa.get("nome"),
+            "email_cooperativa": cooperativa.get("email"),
+            **_legacy(cooperativa, "cooperativa", "usuario"),
+        }
 
-
-                "senha_hash":
-
-                    usuario.get(
-                        "senha_hash",
-                        "MIGRACAO_TEMP"
+    def transform_dataset(self, dataset):
+        sindicos = dataset.get("sindicos", [])
+        # No destino o CPF fica no usuário; no legado só o síndico tem CPF.
+        cpf_do_usuario = {s.get("legacy_usuario_id"): s.get("cpf") for s in sindicos}
+        # No legado o síndico aponta para o condomínio; no destino é o inverso.
+        # ponytail: com mais de um síndico por condomínio vale o de maior ID.
+        sindico_do_condominio = {
+            s.get("legacy_condominio_id"): s.get("legacy_sindico_id") for s in sindicos
+        }
+        enriquecido = {
+            **dataset,
+            "usuarios": [
+                {**u, "cpf": cpf_do_usuario.get(u.get("legacy_usuario_id"))}
+                for u in dataset.get("usuarios", [])
+            ],
+            "condominios": [
+                {
+                    **c,
+                    "legacy_sindico_id": sindico_do_condominio.get(
+                        c.get("legacy_condominio_id")
                     ),
-
-
-                "cpf":
-
-                    usuario.get("cpf"),
-
-
-                "ativo":
-
-                    usuario.get("ativo", True),
-
-
-                "registro_em":
-
-                    usuario.get(
-                        "data_cadastro",
-                        datetime.now()
-                    ),
-
-
-                "tipo_usuario_id":
-
-                    usuario.get(
-                        "tipo_usuario_id",
-                        1
-                    ),
-
-
-                "endereco_id":
-
-                    self.get_new_id(
-                        "endereco",
-                        usuario.get(
-                            "legacy_endereco_id"
-                        )
-                    )
-
-            }
-
-
-            return mapped
-
-
-        except Exception as error:
-
-            logger.error(
-                f"Erro mapeando usuário: {error}"
-            )
-
-            raise
-
-
-
-    # =====================================================
-    # ENDEREÇO
-    # =====================================================
-
-    def map_endereco(
-        self,
-        endereco
-    ):
-
-        return {
-
-
-            "logradouro":
-
-                endereco.get("logradouro"),
-
-
-            "numero":
-
-                endereco.get("numero"),
-
-
-            "cidade":
-
-                endereco.get("cidade"),
-
-
-            "estado":
-
-                endereco.get("estado"),
-
-
-            "cep":
-
-                endereco.get("cep"),
-
-
-            "complemento":
-
-                endereco.get("complemento")
-
-        }
-
-
-
-    # =====================================================
-    # SÍNDICO
-    # =====================================================
-
-    def map_sindico(
-        self,
-        sindico
-    ):
-
-
-        return {
-
-
-            "usuario_id":
-
-                self.get_new_id(
-                    "usuario",
-                    sindico.get(
-                        "legacy_usuario_id"
-                    )
-                )
-
-        }
-
-
-
-    # =====================================================
-    # CONDOMÍNIO
-    # =====================================================
-
-    def map_condominio(
-        self,
-        condominio
-    ):
-
-
-        return {
-
-
-            "nome_condominio":
-
-                condominio.get(
-                    "nome"
-                ),
-
-
-            "cnpj":
-
-                condominio.get(
-                    "cnpj"
-                ),
-
-
-            "endereco_id":
-
-                self.get_new_id(
-                    "endereco",
-                    condominio.get(
-                        "legacy_endereco_id"
-                    )
-                ),
-
-
-            "sindico_id":
-
-                self.get_new_id(
-                    "sindico",
-                    condominio.get(
-                        "legacy_sindico_id"
-                    )
-                )
-
-        }
-
-
-
-    # =====================================================
-    # COOPERATIVA
-    # =====================================================
-
-    def map_cooperativa(
-        self,
-        cooperativa
-    ):
-
-
-        return {
-
-
-            "nome":
-
-                cooperativa.get(
-                    "nome"
-                ),
-
-
-            "descricao":
-
-                cooperativa.get(
-                    "descricao"
-                ),
-
-
-            "ativa":
-
-                True
-
-        }
-
-
-
-    # =====================================================
-    # MATERIAL
-    # =====================================================
-
-    def map_material(
-        self,
-        material
-    ):
-
-
-        return {
-
-
-            "nome":
-
-                material.get(
-                    "nome"
-                ),
-
-
-            "descricao":
-
-                material.get(
-                    "descricao"
-                )
-
-        }
-
-
-
-    # =====================================================
-    # CONTEÚDO EDUCATIVO
-    # =====================================================
-
-    def map_conteudo(
-        self,
-        conteudo
-    ):
-
-
-        return {
-
-
-            "titulo":
-
-                conteudo.get(
-                    "titulo"
-                ),
-
-
-            "descricao":
-
-                conteudo.get(
-                    "descricao"
-                ),
-
-
-            "url":
-
-                conteudo.get(
-                    "url"
-                )
-
-        }
-
-
-
-    # =====================================================
-    # DATASET COMPLETO
-    # =====================================================
-
-    def transform_dataset(
-        self,
-        dataset
-    ):
-
-
-        logger.info(
-            "Iniciando transformação completa"
-        )
-
-
-        transformed = {}
-
-
-
-        if "usuarios" in dataset:
-
-
-            transformed["usuarios"] = [
-
-                {
-
-                    **self.map_usuario(usuario),
-                    "legacy_endereco_id":
-                        usuario.get("legacy_endereco_id"),
-
-
-                    "legacy_usuario_id":
-
-                        usuario.get(
-                            "legacy_usuario_id"
-                        )
-
                 }
-
-
-                for usuario in dataset["usuarios"]
-
+                for c in dataset.get("condominios", [])
+            ],
+        }
+        transformed = {
+            e.dataset: [
+                getattr(self, f"map_{e.nome}")(record)
+                for record in enriquecido.get(e.dataset, [])
             ]
-
-
-
-        if "enderecos" in dataset:
-
-
-            transformed["enderecos"] = [
-
-                {
-
-                    **self.map_endereco(endereco),
-
-
-                    "legacy_endereco_id":
-
-                        endereco.get(
-                            "legacy_endereco_id"
-                        )
-
-                }
-
-
-                for endereco in dataset["enderecos"]
-
-            ]
-
-
-
-        if "sindicos" in dataset:
-
-
-            transformed["sindicos"] = [
-
-                {
-
-                    **self.map_sindico(sindico),
-                    "legacy_usuario_id":
-                        sindico.get("legacy_usuario_id"),
-
-
-                    "legacy_sindico_id":
-
-                        sindico.get(
-                            "legacy_sindico_id"
-                        )
-
-                }
-
-
-                for sindico in dataset["sindicos"]
-
-            ]
-
-
-
-        if "condominios" in dataset:
-
-
-            transformed["condominios"] = [
-
-                {
-
-                    **self.map_condominio(condominio),
-
-
-                    "legacy_condominio_id":
-
-                        condominio.get(
-                            "legacy_condominio_id"
-                        )
-
-                }
-
-
-                for condominio in dataset["condominios"]
-
-            ]
-
-
-
-        if "cooperativas" in dataset:
-
-
-            transformed["cooperativas"] = [
-
-                self.map_cooperativa(item)
-
-                for item in dataset["cooperativas"]
-
-            ]
-
-
-
-        if "materiais" in dataset:
-
-
-            transformed["materiais"] = [
-
-                self.map_material(item)
-
-                for item in dataset["materiais"]
-
-            ]
-
-
-
-        if "conteudos" in dataset:
-
-
-            transformed["conteudos"] = [
-
-                self.map_conteudo(item)
-
-                for item in dataset["conteudos"]
-
-            ]
-
-
-
-        logger.info(
-            "Transformação concluída"
-        )
-
-
+            for e in ENTIDADES
+        }
+        logger.info("Transformação concluída")
         return transformed
 
+    def save_mapping(self, entity, old_id, new_id):
+        if old_id is not None:
+            self.id_mapping[entity][old_id] = new_id
 
-
-    # =====================================================
-    # CONTROLE DE IDS
-    # =====================================================
-
-    def save_mapping(
-        self,
-        entity,
-        old_id,
-        new_id
-    ):
-
-
-        if old_id is None:
-
-            return
-
-
-        self.id_mapping[entity][old_id] = new_id
-
-
-        logger.info(
-
-            f"Mapeamento criado {entity}: "
-            f"{old_id} -> {new_id}"
-
-        )
-
-
-
-    def get_new_id(
-        self,
-        entity,
-        old_id
-    ):
-
-
-        if old_id is None:
-
-            return None
-
-
-        return self.id_mapping.get(
-
-            entity,
-
-            {}
-
-        ).get(
-
-            old_id
-
-        )
+    def get_new_id(self, entity, old_id):
+        return self.id_mapping.get(entity, {}).get(old_id)

@@ -1,207 +1,44 @@
-version: "3.9"
-
-
 services:
-
-
-  # =====================================
-  # BANCO LEGADO
-  # =====================================
-
   postgres_legacy:
-
-
     image: postgres:16
-
-
     container_name: migration_legacy_db
-
-
     restart: always
-
-
-
     environment:
-
-
-      POSTGRES_DB:
-        ecociente_legado
-
-
-      POSTGRES_USER:
-        postgres
-
-
-      POSTGRES_PASSWORD:
-        postgres
-
-
-
+      POSTGRES_DB: ecociente_legado
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
-
-
       - "5432:5432"
-
-
-
     volumes:
-
-
       - legacy_data:/var/lib/postgresql/data
 
-
-
-    networks:
-
-
-      - migration_network
-
-
-
-
-
-  # =====================================
-  # BANCO NOVO NORMALIZADO
-  # =====================================
-
-
   postgres_target:
-
-
     image: postgres:16
-
-
     container_name: migration_target_db
-
-
     restart: always
-
-
-
     environment:
-
-
-      POSTGRES_DB:
-        ecociente_normalizado
-
-
-      POSTGRES_USER:
-        postgres
-
-
-      POSTGRES_PASSWORD:
-        postgres
-
-
-
+      POSTGRES_DB: ecociente_normalizado
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
-
-
       - "5433:5432"
-
-
-
     volumes:
-
-
       - target_data:/var/lib/postgresql/data
 
-
-
-    networks:
-
-
-      - migration_network
-
-
-
-
-
-  # =====================================
-  # APLICAÇÃO RPA
-  # =====================================
-
-
+  # Migração pela linha de comando. Dentro da rede do Compose os bancos são
+  # alcançados pelo nome do serviço, não por localhost.
   migration_rpa:
-
-
-    build:
-
-      context: .
-
-
-
+    build: .
     container_name: migration_rpa_app
-
-
-
     depends_on:
-
-
       - postgres_legacy
-
       - postgres_target
-
-
-
-    env_file:
-
-
-      - .env
-
-
-
+    environment:
+      LEGACY_DATABASE_URL: postgresql://postgres:postgres@postgres_legacy:5432/ecociente_legado
+      TARGET_DATABASE_URL: postgresql://postgres:postgres@postgres_target:5432/ecociente_normalizado
     volumes:
-
-
       - ./logs:/app/logs
 
-
-      - ./reports:/app/reports
-
-
-
-    networks:
-
-
-      - migration_network
-
-
-
-    command:
-
-
-      python main.py
-
-
-
-
-
-# =====================================
-# VOLUMES
-# =====================================
-
-
 volumes:
-
-
   legacy_data:
-
-
   target_data:
-
-
-
-
-
-# =====================================
-# NETWORK
-# =====================================
-
-
-networks:
-
-
-  migration_network:
-
-    driver: bridge

@@ -1,472 +1,111 @@
-"""
-Normalização de dados da migração.
-
-Responsável por:
-- Padronizar textos
-- Limpar dados inconsistentes
-- Normalizar contatos
-- Corrigir formatos
-- Preparar dados para validação e carga
-"""
-
+"""Normalização: padroniza textos e formatos antes do mapeamento."""
 
 import re
-from datetime import datetime
 
 from config.logging_config import get_logger
 
-
-
 logger = get_logger()
 
+_PARTICULAS = {"da", "de", "do", "das", "dos", "e"}
+# ponytail: texto fora desta lista vira False; acrescente o valor usado no legado.
+_VERDADEIROS = {"sim", "s", "true", "t", "1", "ativo", "a"}
 
 
 class DataNormalizer:
-
-
-
-    # =====================================================
-    # TEXTO
-    # =====================================================
-
-    def normalize_text(
-        self,
-        value
-    ):
-
-        """
-        Remove espaços extras
-        e padroniza texto.
-        """
-
+    def normalize_text(self, value):
         if value is None:
-
             return None
+        return re.sub(r"\s+", " ", str(value)).strip() or None
 
-
-        value = str(value)
-
-
-        value = value.strip()
-
-
-        value = re.sub(
-            r"\s+",
-            " ",
-            value
-        )
-
-
-        return value
-
-
-
-    # =====================================================
-    # NOME
-    # =====================================================
-
-    def normalize_name(
-        self,
-        name
-    ):
-
-        """
-        Exemplo:
-
-        '  JOÃO DA SILVA '
-
-        vira:
-
-        'João da Silva'
-        """
-
-
+    def normalize_name(self, name):
+        """'  JOÃO DA SILVA ' vira 'João da Silva'."""
+        name = self.normalize_text(name)
         if not name:
-
             return None
-
-
-
-        name = self.normalize_text(
-            name
+        words = name.lower().split(" ")
+        return " ".join(
+            word if index and word in _PARTICULAS else word.capitalize()
+            for index, word in enumerate(words)
         )
 
+    def normalize_email(self, email):
+        return email.strip().lower() if email else None
 
-        return name.title()
+    def normalize_digits(self, value):
+        """CPF, CNPJ e telefone: só os dígitos."""
+        return re.sub(r"\D", "", str(value)) or None if value else None
 
+    def normalize_zipcode(self, zipcode):
+        digits = self.normalize_digits(zipcode)
+        return digits.zfill(8) if digits else None
 
-
-    # =====================================================
-    # EMAIL
-    # =====================================================
-
-    def normalize_email(
-        self,
-        email
-    ):
-
-
-        if not email:
-
-            return None
-
-
-
-        email = email.strip().lower()
-
-
-
-        return email
-
-
-
-    # =====================================================
-    # TELEFONE
-    # =====================================================
-
-    def normalize_phone(
-        self,
-        phone
-    ):
-
-
-        if not phone:
-
-            return None
-
-
-
-        # remove tudo que não é número
-
-        phone = re.sub(
-            r"\D",
-            "",
-            str(phone)
-        )
-
-
-
-        # Brasil:
-        # adiciona DDD caso necessário
-        #
-        # Ex:
-        # 999999999
-        #
-        # vira:
-        # 999999999
-
-
-        return phone
-
-
-
-    # =====================================================
-    # CPF / CNPJ
-    # =====================================================
-
-    def normalize_document(
-        self,
-        document
-    ):
-
-
-        if not document:
-
-            return None
-
-
-
-        return re.sub(
-            r"\D",
-            "",
-            str(document)
-        )
-
-
-
-    # =====================================================
-    # CEP
-    # =====================================================
-
-    def normalize_zipcode(
-        self,
-        zipcode
-    ):
-
-
-        if not zipcode:
-
-            return None
-
-
-
-        zipcode = re.sub(
-            r"\D",
-            "",
-            str(zipcode)
-        )
-
-
-
-        return zipcode.zfill(8)
-
-
-
-    # =====================================================
-    # DATAS
-    # =====================================================
-
-    def normalize_date(
-        self,
-        date_value
-    ):
-
-
-        if not date_value:
-
-            return None
-
-
-
-        if isinstance(
-            date_value,
-            datetime
-        ):
-
-            return date_value
-
-
-
-        formats = [
-
-            "%d/%m/%Y",
-
-            "%Y-%m-%d",
-
-            "%d-%m-%Y"
-
-        ]
-
-
-
-        for fmt in formats:
-
-
-            try:
-
-                return datetime.strptime(
-                    str(date_value),
-                    fmt
-                )
-
-
-            except ValueError:
-
-                continue
-
-
-
-        logger.warning(
-
-            f"Data inválida encontrada: {date_value}"
-
-        )
-
-
-        return None
-
-
-
-    # =====================================================
-    # BOOLEAN
-    # =====================================================
-
-    def normalize_boolean(
-        self,
-        value
-    ):
-
-
+    def normalize_boolean(self, value):
         if value is None:
+            return None
+        if isinstance(value, str):
+            return value.strip().lower() in _VERDADEIROS
+        return bool(value)
 
-            return False
-
-
-
-        true_values = [
-
-            "sim",
-
-            "s",
-
-            "true",
-
-            "1",
-
-            1,
-
-            True
-
-        ]
-
-
-
-        return value in true_values
-
-
-
-    # =====================================================
-    # NORMALIZAR USUÁRIO
-    # =====================================================
-
-    def normalize_usuario(
-        self,
-        usuario
-    ):
-
-
+    def normalize_usuario(self, usuario):
         return {
             **usuario,
-
-
-            "nome":
-                self.normalize_name(
-                    usuario.get("nome")
-                ),
-
-
-
-            "email":
-                self.normalize_email(
-                    usuario.get("email")
-                ),
-
-
-
-            "telefone":
-                self.normalize_phone(
-                    usuario.get("telefone")
-                ),
-
-
-
-            "cpf":
-                self.normalize_document(
-                    usuario.get("cpf")
-                ),
-
-
-
-            "ativo":
-                self.normalize_boolean(
-                    usuario.get("ativo")
-                )
-
+            "nome": self.normalize_name(usuario.get("nome")),
+            "email": self.normalize_email(usuario.get("email")),
+            "ativo": self.normalize_boolean(usuario.get("ativo")),
         }
 
-
-
-    # =====================================================
-    # NORMALIZAR ENDEREÇO
-    # =====================================================
-
-    def normalize_endereco(
-        self,
-        endereco
-    ):
-
-
+    def normalize_endereco(self, endereco):
         return {
             **endereco,
-
-
-            "logradouro":
-                self.normalize_text(
-                    endereco.get("logradouro")
-                ),
-
-
-
-
-            "cidade":
-                self.normalize_name(
-                    endereco.get("cidade")
-                ),
-
-
-            "estado":
-                self.normalize_text(
-                    endereco.get("estado")
-                ),
-
-
-            "cep":
-                self.normalize_zipcode(
-                    endereco.get("cep")
-                )
-
+            "logradouro": self.normalize_text(endereco.get("logradouro")),
+            "bairro": self.normalize_name(endereco.get("bairro")),
+            "cidade": self.normalize_name(endereco.get("cidade")),
+            "estado": (self.normalize_text(endereco.get("estado")) or "").upper()
+            or None,
+            "cep": self.normalize_zipcode(endereco.get("cep")),
         }
 
+    def normalize_condominio(self, condominio):
+        return {
+            **condominio,
+            "nome": self.normalize_text(condominio.get("nome")),
+            "cnpj": self.normalize_digits(condominio.get("cnpj")),
+        }
 
+    def normalize_cooperativa(self, cooperativa):
+        return {
+            **cooperativa,
+            "nome": self.normalize_text(cooperativa.get("nome")),
+            "email": self.normalize_email(cooperativa.get("email")),
+            "cnpj": self.normalize_digits(cooperativa.get("cnpj")),
+        }
 
-    # =====================================================
-    # NORMALIZA DATASET COMPLETO
-    # =====================================================
+    def normalize_tipo(self, tipo):
+        return {**tipo, "nome_tipo": self.normalize_text(tipo.get("nome_tipo"))}
 
-    def normalize_dataset(
-        self,
-        dataset
-    ):
-
-
-        logger.info(
-            "Iniciando normalização dos dados"
-        )
-
-
-
-        normalized = {}
-
-
-
-        if "usuarios" in dataset:
-
-
-            normalized["usuarios"] = [
-
-                self.normalize_usuario(item)
-
-                for item in dataset["usuarios"]
-
-            ]
-
-
-
-        if "enderecos" in dataset:
-
-
-            normalized["enderecos"] = [
-
-                self.normalize_endereco(item)
-
-                for item in dataset["enderecos"]
-
-            ]
-
-
-
-        # Síndicos não têm campos a normalizar: repassa sem descartar
-        if "sindicos" in dataset:
-
-            normalized["sindicos"] = list(
-                dataset["sindicos"]
+    def normalize_dataset(self, dataset):
+        normalizers = {
+            "tipos_usuarios": self.normalize_tipo,
+            "tipos_condominios": self.normalize_tipo,
+            "usuarios": self.normalize_usuario,
+            "enderecos": self.normalize_endereco,
+            "condominios": self.normalize_condominio,
+            "cooperativas": self.normalize_cooperativa,
+            "telefones": lambda t: {
+                **t,
+                "numero": self.normalize_digits(t.get("numero")),
+            },
+            "sindicos": lambda s: {**s, "cpf": self.normalize_digits(s.get("cpf"))},
+            "torres": lambda t: {**t, "nome": self.normalize_text(t.get("nome"))},
+        }
+        # Datasets sem normalizador (moradores) passam adiante sem alteração.
+        normalized = {
+            name: (
+                [normalizers[name](item) for item in records]
+                if name in normalizers
+                else list(records)
             )
-
-
-        logger.info(
-            "Normalização finalizada"
-        )
-
-
-
+            for name, records in dataset.items()
+        }
+        logger.info("Normalização finalizada")
         return normalized
