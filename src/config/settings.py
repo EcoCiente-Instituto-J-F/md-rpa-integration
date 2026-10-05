@@ -1,150 +1,31 @@
-"""
-Configurações globais do projeto RPA de migração.
-"""
+"""Configurações do projeto, lidas do .env."""
 
+import sys
 from pathlib import Path
 
-from pydantic_settings import (
-    BaseSettings,
-    SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Empacotado com PyInstaller, o .env e os logs ficam ao lado do executável.
+BASE_DIR = (
+    Path(sys.executable).parent
+    if getattr(sys, "frozen", False)
+    else Path(__file__).resolve().parent.parent.parent
 )
-
-
-
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings(BaseSettings):
-
-
-    # ==============================
-    # Aplicação
-    # ==============================
-
-    APP_NAME: str = "Migration RPA System"
-
-    ENVIRONMENT: str = "development"
-
-    DEBUG: bool = True
-
-
-
-    # ==============================
-    # Banco
-    # ==============================
-
-    # ==============================
-    # Banco
-    # ==============================
-
-    # URLs completas
     LEGACY_DATABASE_URL: str
     TARGET_DATABASE_URL: str
-
-
-    # Banco legado
-    LEGACY_DB_HOST: str
-    LEGACY_DB_PORT: int
-    LEGACY_DB_NAME: str
-    LEGACY_DB_USER: str
-    LEGACY_DB_PASSWORD: str
-
-
-    # Banco destino
-    TARGET_DB_HOST: str
-    TARGET_DB_PORT: int
-    TARGET_DB_NAME: str
-    TARGET_DB_USER: str
-    TARGET_DB_PASSWORD: str
-
-    TARGET_SCHEMA: str = "public"
-
-
-    DB_POOL_SIZE: int = 10
-
-    DB_MAX_OVERFLOW: int = 20
-
-
-
-    # ==============================
-    # ETL
-    # ==============================
-
-    BATCH_SIZE: int = 500
-
     MAX_RETRIES: int = 3
-
-    TIMEOUT_SECONDS: int = 60
-
-
-
-    MIGRATION_MODE: str = "FULL"
-
-
-
-    # ==============================
-    # Auditoria
-    # ==============================
-
-    ENABLE_AUDIT: bool = True
-
-
-
-    # ==============================
-    # Diretórios
-    # ==============================
-
-    DATA_PATH: Path = BASE_DIR / "data"
-
+    LOG_LEVEL: str = "INFO"
     LOG_PATH: Path = BASE_DIR / "logs"
 
-    REPORT_PATH: Path = BASE_DIR / "reports"
-
-
-
-    # ==============================
-    # Logs
-    # ==============================
-
-    LOG_LEVEL: str = "INFO"
-
-    LOG_FILE_NAME: str = "migration.log"
-
-
-
-    # ==============================
-    # Segurança
-    # ==============================
-
-    SECRET_KEY: str | None = None
-
-
-
     model_config = SettingsConfigDict(
-    env_file=BASE_DIR / ".env",
-    env_file_encoding="utf-8",
-    case_sensitive=True
-)
-
-
-
-    def create_directories(self):
-
-        self.DATA_PATH.mkdir(
-            exist_ok=True
-        )
-
-        self.LOG_PATH.mkdir(
-            exist_ok=True
-        )
-
-        self.REPORT_PATH.mkdir(
-            exist_ok=True
-        )
-
+        env_file=BASE_DIR / ".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",  # .env antigos têm variáveis que não são mais lidas
+    )
 
 
 settings = Settings()
-
-
-settings.create_directories()
