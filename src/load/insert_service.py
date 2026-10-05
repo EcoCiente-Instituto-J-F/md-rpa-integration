@@ -1,317 +1,124 @@
 """
-Serviço de carga dos dados migrados.
+Carga no banco destino, dentro da transação aberta pelo orquestrador.
 
-Responsável por:
-
-- Inserir dados no banco destino
-- Utilizar transação externa
-- Registrar IDs criados
-- Manter integridade referencial
+A tabela de controle `migracao_id_map` guarda legado -> novo ID de tudo que já
+foi migrado. É ela que torna a carga idempotente: registro já mapeado não é
+inserido de novo.
 """
 
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError
 
-from load.primary_keys import PRIMARY_KEYS
 from config.logging_config import get_logger
-from rpa.retry_handler import RetryHandler
-
+from entidades import ENTIDADES
+from transform.validators import rejection
 
 logger = get_logger()
 
+CONTROLE_DDL = """
+    CREATE TABLE IF NOT EXISTS migracao_id_map (
+        entidade   text        NOT NULL,
+        legacy_id  bigint      NOT NULL,
+        novo_id    bigint      NOT NULL,
+        migrado_em timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (entidade, legacy_id)
+    )
+"""
+
 
 class InsertService:
-
     def __init__(self, data_mapper):
-
         self.data_mapper = data_mapper
-        self.retry = RetryHandler()
+        self.rejected = []
+        self.stats = {}
 
-
-    # =====================================================
-    # REMOVE CAMPOS INTERNOS DA MIGRAÇÃO
-    # =====================================================
-
-    def sanitize_data(
-        self,
-        data
-    ):
-
-        """
-        Remove campos utilizados somente
-        no controle da migração.
-
-        Exemplo:
-
-        Remove:
-            legacy_usuario_id
-            legacy_endereco_id
-
-        Mantém:
-            campos reais do banco destino
-        """
-
-        return {
-            key: value
-            for key, value in data.items()
-            if not key.startswith("legacy_")
-        }
-
-
-    # =====================================================
-    # INSERT GENÉRICO
-    # =====================================================
-
-    def insert(
-        self,
-        table,
-        data,
-        session
-    ):
-
-
-        primary_key = PRIMARY_KEYS.get(
-            table
+    def _load_id_mapping(self, session):
+        session.execute(text(CONTROLE_DDL))
+        mapping = self.data_mapper.id_mapping
+        for ids in mapping.values():
+            ids.clear()
+        rows = session.execute(
+            text("SELECT entidade, legacy_id, novo_id FROM migracao_id_map")
         )
+        for entidade, legacy_id, novo_id in rows:
+            mapping.setdefault(entidade, {})[legacy_id] = novo_id
 
-
-        if not primary_key:
-
-            raise Exception(
-                f"PK não configurada para {table}"
-            )
-
-
-        insert_data = self.sanitize_data(
-            data
-        )
-
-
-        columns = ", ".join(
-            insert_data.keys()
-        )
-
-
-        values = ", ".join(
-            [
-                f":{column}"
-                for column in insert_data.keys()
-            ]
-        )
-
-
-        query = f"""
-        INSERT INTO {table}
-        ({columns})
-        VALUES
-        ({values})
-        RETURNING {primary_key};
-        """
-
-
-        result = self.retry.execute(
-            session.execute,
-            text(query),
-            insert_data
-        )
-
-
-        return result.fetchone()[0]
-
-
-
-    # =====================================================
-    # USUÁRIO
-    # =====================================================
-
-    def insert_usuario(
-        self,
-        usuarios,
-        session
-    ):
-
-        logger.info(
-            "Inserindo usuários"
-        )
-
-
-        for usuario in usuarios:
-
-
-            # Resolve FK agora: o mapeamento só existe após inserir endereços
-            usuario["endereco_id"] = self.data_mapper.get_new_id(
-                "endereco",
-                usuario.get("legacy_endereco_id")
-            )
-
-            if not usuario.get("endereco_id"):
-
-                raise Exception(
-                    "Usuário sem endereço mapeado"
+    def _resolve_fks(self, entidade, record):
+        """Preenche as FKs com os novos IDs. Rejeita o registro se o pai não migrou."""
+        for coluna, pai, obrigatoria in entidade.fks:
+            campo = f"legacy_{pai}_id"
+            legacy_pai = record.get(campo)
+            novo_id = self.data_mapper.get_new_id(pai, legacy_pai)
+            if novo_id is None and (obrigatoria or legacy_pai is not None):
+                motivo = (
+                    f"Sem {pai} no legado"
+                    if legacy_pai is None
+                    else f"O {pai} {legacy_pai} não foi migrado"
                 )
+                self.rejected.append(rejection(entidade.nome, record, campo, motivo))
+                return False
+            record[coluna] = novo_id
+        return True
 
-
-            if not usuario.get("tipo_usuario_id"):
-
-                raise Exception(
-                    "Usuário sem tipo definido"
-                )
-
-
-            new_id = self.insert(
-                "tb_usuarios",
-                usuario,
-                session
-            )
-            
-            old_id = usuario.get(
-                "legacy_usuario_id"
-            )
-
-
-            self.data_mapper.save_mapping(
-                "usuario",
-                old_id,
-                new_id
-            )
-
-
-
-    # =====================================================
-    # SÍNDICO
-    # =====================================================
-
-    def insert_sindico(
-        self,
-        sindicos,
-        session
-    ):
-
-        logger.info(
-            "Inserindo síndicos"
+    def insert(self, entidade, record, session):
+        data = {k: v for k, v in record.items() if not k.startswith("legacy_")}
+        columns = ", ".join(data)
+        values = ", ".join(f":{column}" for column in data)
+        query = (
+            f"INSERT INTO {entidade.tabela_destino} ({columns}) "
+            f"VALUES ({values}) RETURNING {entidade.pk_destino}"
         )
+        return session.execute(text(query), data).scalar()
 
+    def load_dataset(self, dataset, session):
+        self.rejected = []
+        self.stats = {}
+        self._load_id_mapping(session)
 
-        for sindico in sindicos:
+        for entidade in ENTIDADES:
+            migrados = ja_migrados = 0
+            for record in dataset.get(entidade.dataset, []):
+                legacy_id = record[f"legacy_{entidade.nome}_id"]
+                if legacy_id in self.data_mapper.id_mapping[entidade.nome]:
+                    ja_migrados += 1
+                    continue
+                if not self._resolve_fks(entidade, record):
+                    continue
+                try:
+                    # SAVEPOINT: uma linha recusada pelo banco não aborta a transação.
+                    with session.begin_nested():
+                        new_id = self.insert(entidade, record, session)
+                        session.execute(
+                            text(
+                                "INSERT INTO migracao_id_map "
+                                "(entidade, legacy_id, novo_id) "
+                                "VALUES (:entidade, :legacy_id, :novo_id)"
+                            ),
+                            {
+                                "entidade": entidade.nome,
+                                "legacy_id": legacy_id,
+                                "novo_id": new_id,
+                            },
+                        )
+                except IntegrityError as error:
+                    motivo = str(error.orig).strip().splitlines()[0]
+                    self.rejected.append(
+                        rejection(
+                            entidade.nome,
+                            record,
+                            None,
+                            f"Recusado pelo banco: {motivo}",
+                        )
+                    )
+                    continue
+                self.data_mapper.save_mapping(entidade.nome, legacy_id, new_id)
+                migrados += 1
 
-
-            sindico["usuario_id"] = self.data_mapper.get_new_id(
-                "usuario",
-                sindico.get("legacy_usuario_id")
-            )
-
-            new_id = self.insert(
-                "tb_sindicos",
-                sindico,
-                session
-            )
-
-
-            old_id = sindico.get(
-                "legacy_sindico_id"
-            )
-
-
-            self.data_mapper.save_mapping(
-                "sindico",
-                old_id,
-                new_id
-            )
-
-
-
-    # =====================================================
-    # ENDEREÇO
-    # =====================================================
-
-    def insert_endereco(
-        self,
-        enderecos,
-        session
-    ):
-
-        logger.info(
-            "Inserindo endereços"
-        )
-
-
-        for endereco in enderecos:
-
-
-            new_id = self.insert(
-                "tb_enderecos",
-                endereco,
-                session
-            )
-
-
-            old_id = endereco.get(
-                "legacy_endereco_id"
-            )
-
-
-            self.data_mapper.save_mapping(
-                "endereco",
-                old_id,
-                new_id
-            )
-
-
-
-    # =====================================================
-    # CARGA PRINCIPAL
-    # =====================================================
-
-    def load_dataset(
-        self,
-        dataset,
-        session
-    ):
-
-        logger.info(
-            "===== INÍCIO LOAD ====="
-        )
-
-
-        try:
-
-
-            # Ordem respeitando FK
-
-            if "enderecos" in dataset:
-
-                self.insert_endereco(
-                    dataset["enderecos"],
-                    session
-                )
-
-
-            if "usuarios" in dataset:
-
-                self.insert_usuario(
-                    dataset["usuarios"],
-                    session
-                )
-
-
-            if "sindicos" in dataset:
-
-                self.insert_sindico(
-                    dataset["sindicos"],
-                    session
-                )
-
-
+            self.stats[entidade.nome] = {
+                "migrados": migrados,
+                "ja_migrados": ja_migrados,
+            }
             logger.info(
-                "===== LOAD FINALIZADO ====="
+                f"{entidade.tabela_destino}: {migrados} migrados, "
+                f"{ja_migrados} já migrados"
             )
-
-
-        except SQLAlchemyError as error:
-
-
-            logger.error(
-                f"Erro durante carga: {error}"
-            )
-
-            raise
