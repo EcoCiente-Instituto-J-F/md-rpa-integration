@@ -1,421 +1,125 @@
 """
-Orquestrador principal da migração RPA.
+Orquestrador da migração.
 
-Responsável por:
+Fluxo: verificação dos bancos -> extração -> normalização -> transformação ->
+validação -> carga -> reconciliação -> COMMIT.
 
-- Controlar fluxo completo ETL
-- Coordenar serviços
-- Garantir ordem de execução
-- Controlar transações
-- Registrar execução
+A carga e a reconciliação rodam na mesma transação: se a conta não fechar,
+nada é gravado. Em simulação (`dry_run`) a transação é sempre desfeita.
 """
 
+from sqlalchemy.exc import OperationalError
+from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_fixed
 
-from datetime import datetime
-
-
+from audit.migration_log import MigrationLog
+from audit.reconciliation import Reconciliation
+from config.database import TargetSession, database_health_check, legacy_engine
 from config.logging_config import get_logger
-
-from config.database import database_health_check
-
-from rpa.retry_handler import RetryHandler
-
-from audit.migration_log import MigrationLogger
-
-from audit.error_report import ErrorReport
-
-from audit.reconciliation import Reconciliation
-
+from config.settings import settings
+from entidades import ENTIDADES
 from extract.extract_service import ExtractService
-
-from transform.data_mapper import DataMapper
-
-from transform.normalization import DataNormalizer
-
-from transform.validators import DataValidator
-
 from load.insert_service import InsertService
-
-from audit.reconciliation import Reconciliation
-
-from config.database import legacy_engine, target_engine
-
-from load.transaction_manager import TransactionManager
-
-
+from transform.data_mapper import DataMapper
+from transform.normalization import DataNormalizer
+from transform.validators import DataValidator
 
 logger = get_logger()
 
 
-
 class MigrationOrchestrator:
-
-
-
-    def __init__(self):
-
-
+    def __init__(self, dry_run=False):
+        self.dry_run = dry_run
+        self.log = MigrationLog(simulacao=dry_run)
         self.extract_service = ExtractService()
-
-        self.retry = RetryHandler()
-
-
-        self.mapper = DataMapper()
-
-        self.audit = MigrationLogger()
-
-        self.error_report = ErrorReport()
-
         self.normalizer = DataNormalizer()
-
+        self.mapper = DataMapper()
         self.validator = DataValidator()
-
-        self.insert_service = InsertService(
-
-            self.mapper
-
-        )
-
-
-        self.transaction = TransactionManager()
-        
-        self.reconciliation = Reconciliation(
-    legacy_engine,
-    target_engine
-)
-
-
-
-    # =====================================================
-    # DATABASE HEALTH CHECK
-    # =====================================================
+        self.insert_service = InsertService(self.mapper)
+        self.reconciliation = Reconciliation(legacy_engine)
 
     def check_databases(self):
-
-
-        logger.info(
-            "Executando health check dos bancos"
-        )
-
-
-        status = database_health_check()
-
-
-
-        if not all(status.values()):
-
-            raise Exception(
-                "Falha na conexão com bancos"
-            )
-
-
-        logger.info(
-            "Bancos disponíveis"
-        )
-
-
-
-    # =====================================================
-    # EXTRACT
-    # =====================================================
-
-    def extract(self):
-
-
-        logger.info(
-            "ETAPA 1 - EXTRAÇÃO"
-        )
-
-
-        data = self.extract_service.extract_all()
-
-
-        logger.info(
-            f"Registros extraídos: {len(data)}"
-        )
-
-
-        return data
-
-
-
-    # =====================================================
-    # TRANSFORM
-    # =====================================================
-
-    def transform(
-        self,
-        data
-    ):
-
-
-        logger.info(
-            "ETAPA 2 - TRANSFORMAÇÃO"
-        )
-
-
-        return self.mapper.transform_dataset(
-            data
-        )
-
-
-
-    # =====================================================
-    # NORMALIZE
-    # =====================================================
-
-    def normalize(
-        self,
-        data
-    ):
-
-
-        logger.info(
-            "ETAPA 3 - NORMALIZAÇÃO"
-        )
-
-
-        return self.normalizer.normalize_dataset(
-            data
-        )
-
-
-
-    # =====================================================
-    # VALIDATE
-    # =====================================================
-
-    def validate(
-        self,
-        data
-    ):
-
-
-        logger.info(
-            "ETAPA 4 - VALIDAÇÃO"
-        )
-
-
-        valid_data = self.validator.validate_dataset(
-            data
-        )
-
-
-        errors = self.validator.get_errors()
-
-
-
-        if errors:
-
-
-            logger.warning(
-
-                f"{len(errors)} registros inválidos encontrados"
-
-            )
-
-
-
-        else:
-
-
-            logger.info(
-                "Dados aprovados na validação"
-            )
-
-
-
-        return valid_data
-
-
-
-    # =====================================================
-    # LOAD
-    # =====================================================
-
-    def load(
-        self,
-        data
-    ):
-
-
-        logger.info(
-            "ETAPA 5 - CARGA"
-        )
-
-
-        with self.transaction.transaction() as session:
-
-
-
-            self.insert_service.load_dataset(
-
-                data,
-
-                session
-
-            )
-
-            for table, records in data.items():
-
-
-                self.audit.register_table(
-
-                    table_name=table,
-
-                    extracted=len(records),
-
-                    inserted=len(records),
-
-                    errors=0
-
+        for nome, banco in database_health_check().items():
+            if banco["erro"]:
+                raise ConnectionError(
+                    f"Sem conexão com o banco {nome} ({banco['alvo']}): "
+                    f"{banco['erro']}. Confira o .env e se o PostgreSQL está no ar."
                 )
 
+    def load(self, data):
+        """Carga + reconciliação em uma transação. Só grava se a conta fechar."""
+        with TargetSession() as session:  # sair sem commit desfaz tudo
+            with self.log.etapa("carga"):
+                self.insert_service.load_dataset(data, session)
 
+            with self.log.etapa("reconciliacao"):
+                rejeitados = self.validator.errors + self.insert_service.rejected
+                tabelas = self.reconciliation.run(
+                    session,
+                    self.mapper.id_mapping,
+                    self.insert_service.stats,
+                    rejeitados,
+                )
+                self.log.update(tabelas=tabelas, rejeitados=rejeitados)
+                divergentes = [
+                    t["tabela_destino"] for t in tabelas if t["status"] != "OK"
+                ]
+                if divergentes:
+                    raise RuntimeError(
+                        f"A reconciliação não fechou em {', '.join(divergentes)}. "
+                        "Nada foi gravado. Se linhas migradas foram apagadas do "
+                        "destino, apague também as linhas correspondentes de "
+                        "migracao_id_map."
+                    )
 
-        logger.info(
-            "Carga concluída"
-        )
-
-    def run_reconciliation(self):
-
-
-        logger.info(
-            "Executando reconciliação"
-        )
-
-
-        result = self.reconciliation.run({
-
-            "usuario":
-    "tb_usuarios",
-
-    "endereco":
-    "tb_enderecos",
-
-    "sindico":
-    "tb_sindicos"
-
-        },
-            self.mapper.id_mapping
-        )
-
-
-        return result
-
-    # =====================================================
-    # EXECUÇÃO PRINCIPAL
-    # =====================================================
+            if self.dry_run:
+                session.rollback()
+                logger.info("Simulação: transação desfeita, nada foi gravado")
+            else:
+                session.commit()
+                logger.info("Transação confirmada (COMMIT)")
 
     def execute(self):
-
-
-        start_time = datetime.now()
-
-
-        self.audit.start()
-
-
-
-        logger.info(
-            "===================================="
-        )
-
-        logger.info(
-            "INICIANDO MIGRAÇÃO RPA"
-        )
-
-
-
+        logger.info("Iniciando " + ("simulação" if self.dry_run else "migração"))
         try:
+            with self.log.etapa("bancos"):
+                self.check_databases()
 
-
-            self.check_databases()
-
-
-
-            extracted = self.extract()
-
-
-            normalized = self.normalize(
-                extracted
-            )
-
-
-            mapped = self.transform(
-                normalized
-            )
-
-
-            validated = self.validate(
-                mapped
-            )
-
-
-
-            self.retry.execute(
-
-                    self.load,
-
-                    validated
-
+            with self.log.etapa("extracao"):
+                data = self.extract_service.extract_all()
+                self.log.update(
+                    tabelas=[
+                        {
+                            "entidade": e.nome,
+                            "tabela_legado": e.tabela_legado,
+                            "tabela_destino": e.tabela_destino,
+                            "legado": len(data[e.dataset]),
+                        }
+                        for e in ENTIDADES
+                    ]
                 )
 
-            reconciliation_result = self.run_reconciliation()
+            with self.log.etapa("normalizacao"):
+                data = self.normalizer.normalize_dataset(data)
 
+            with self.log.etapa("transformacao"):
+                data = self.mapper.transform_dataset(data)
 
-            failed_tables = [
-                item
-                for item in reconciliation_result
-                if item["status"] != "OK"
-            ]
+            with self.log.etapa("validacao"):
+                data = self.validator.validate_dataset(data)
+                self.log.update(rejeitados=list(self.validator.errors))
 
+            # Só queda de conexão vale nova tentativa; erro de dados se repete igual.
+            Retrying(
+                retry=retry_if_exception_type(OperationalError),
+                stop=stop_after_attempt(settings.MAX_RETRIES),
+                wait=wait_fixed(5),
+                reraise=True,
+            )(self.load, data)
 
-            if failed_tables:
-
-                raise Exception(
-                    f"Falha na reconciliação: {failed_tables}"
-                )
-
-
-            end_time = datetime.now()
-
-
-
-            logger.info(
-
-                "MIGRAÇÃO FINALIZADA COM SUCESSO"
-
-            )
-
-
-            logger.info(
-
-                f"Tempo execução: {end_time-start_time}"
-
-            )
-
-
-            self.audit.finish(
-    success=True
-)
-
-
+            self.log.finish()
             return True
 
-
-
         except Exception as error:
-
-
-                self.audit.finish(
-                    success=False
-                )
-
-
-                logger.exception(
-                    f"Migração falhou: {error}"
-                )
-
-
-                return False
+            logger.exception(f"Migração falhou: {error}")
+            self.log.finish(erro=str(error))
+            return False
