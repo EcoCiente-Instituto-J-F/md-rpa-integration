@@ -4,6 +4,9 @@ Entidades migradas, na ordem exigida pelas chaves estrangeiras.
 Cada FK é (coluna no destino, entidade pai, obrigatória). O ID legado do pai
 vem no registro como `legacy_<pai>_id`.
 
+`tabela_legado` só identifica a origem no relatório: a contagem da
+reconciliação usa a própria consulta de extração do dataset.
+
 `chave_natural` vale para tabelas de domínio: se o destino já tem uma linha
 com o mesmo valor nessa coluna, ela é reaproveitada em vez de duplicada.
 """
@@ -50,7 +53,7 @@ ENTIDADES = (
     Entidade(
         "telefone",
         "telefones",
-        "telefone_usuario",
+        "telefone",
         "tb_telefones",
         "id_telefone",
         (("usuario_id", "usuario", True),),
@@ -78,7 +81,7 @@ ENTIDADES = (
     Entidade(
         "torre",
         "torres",
-        "torre",
+        "morador.torre",
         "tb_torres",
         "id_torre",
         (("condominio_id", "condominio", True),),
