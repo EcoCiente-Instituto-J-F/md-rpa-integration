@@ -40,13 +40,13 @@ flowchart LR
 - [x] Carga idempotente (rodar duas vezes não duplica)
 - [x] Reconciliação dentro da transação
 - [x] Execução via Docker
-- [ ] Materiais, coletas, parcerias, postagens, conteúdos, quizzes e pontuação (ver "O que não é migrado")
+- [ ] Parcerias entre condomínio e cooperativa (ver "O que não é migrado")
 
 ## Pré-requisitos
 
 - Python `3.12` ou superior
 - PostgreSQL `16` (pode subir via Docker Compose)
-- O schema do destino aplicado (`sql/ecociente_schema.sql`) e o banco legado populado (modelo em `docs/banco-legado-er.png`)
+- O schema do destino aplicado (`sql/ecociente_schema.sql`) e o banco legado populado (schema em `sql/ecociente_legado_schema.sql`)
 
 ## Usando
 
@@ -144,32 +144,24 @@ Se linhas migradas forem apagadas do destino, a reconciliação acusa a divergê
 | `tipo_usuario` | `tb_lkp_tipos_usuarios` | Tipo com o mesmo nome já existente no destino é reaproveitado |
 | `tipo_condominio` | `tb_lkp_tipos_condominios` | Idem |
 | `endereco` | `tb_enderecos` | `rua` vira `logradouro` |
-| `usuario` | `tb_usuarios` | `cpf` vem do síndico; `senha_hash` vira `MIGRACAO_TEMP` |
-| `telefone_usuario` | `tb_telefones` | `numero` vira `numero_contato`, só dígitos |
+| `usuario` | `tb_usuarios` | `cpf` só com dígitos; `senha_hash` é copiado como está |
+| `telefone` | `tb_telefones` | `numero` vira `numero_contato`, só dígitos |
 | `sindico` | `tb_sindicos` | Datas de mandato não têm coluna no destino |
-| `condominio` | `tb_condominios` | `token` vira `codigo_acesso`; `status` vira `ativo`; recebe o `sindico_id` |
-| `torre` | `tb_torres` | `numero_unidades` não tem coluna no destino |
-| `morador` | `tb_moradores` | O condomínio vem da torre; apartamento e engajamento não têm coluna |
-| `cooperativa` | `tb_cooperativas` | Nome e e-mail vêm do usuário da cooperativa |
+| `condominio` | `tb_condominios` | `token` vira `codigo_acesso`; `status` vira `ativo`; recebe o `sindico_id`; `numero_unidades` e `area_m2` não têm coluna |
+| `morador.torre` | `tb_torres` | Uma torre por nome distinto em cada condomínio (sem diferenciar maiúsculas nem espaços nas pontas) |
+| `morador` | `tb_moradores` | Apartamento e torre não têm coluna no morador do destino |
+| `cooperativa` | `tb_cooperativas` | O e-mail vem do usuário da cooperativa |
 
 ### O que não é migrado
 
-Estas tabelas do legado não têm correspondência direta e pedem decisão de negócio antes:
-
-- `categoria_material` e `material`: o destino só tem `tb_lkp_categorias_residuos`, com pontuação por categoria.
-- `postagem`: `tb_postagens` exige categoria, `hash_foto` e `capturada_em`, que o legado não guarda.
-- `coleta` e `parceria`: o destino separa em agendamentos, visitas e avaliações, com status em tabela de domínio.
-- `conteudo_educativo`, `quiz`, `resultado_quiz` e `progresso_conteudo`: o destino organiza em cursos, aulas, quizzes e tentativas.
-- `pontuacao`: no destino os pontos são um razão (`tb_movimentacoes_pontos`) validado por trigger.
+- `parceira` (vínculo entre condomínio e cooperativa, com início e fim): o destino não tem tabela equivalente; pede decisão de negócio antes.
 - `tb_rel_usuarios_condominios` (vínculo com nível de confiança) não é criado para os moradores migrados.
 
 ### Decisões que valem conferir
 
-- **Senha**: `usuario.senha_hash` no legado é `INTEGER`, não um hash utilizável. Todo usuário entra com `senha_hash = 'MIGRACAO_TEMP'` e precisa redefinir no primeiro acesso.
-- **Status vazio**: usuário ou condomínio com `status` nulo entra como ativo.
+- **Senha**: `usuario.senha_hash` é copiado sem alteração. Se o destino usar outro algoritmo de hash, o usuário precisa redefinir a senha.
 - **Síndico do condomínio**: no legado o síndico aponta para o condomínio; no destino é o inverso. Com mais de um síndico por condomínio, vale o de maior ID.
-- **Morador sem torre** é rejeitado, porque o destino exige o condomínio.
-- **Estado** precisa ter 2 letras (`CHAR(2)`); "São Paulo" por extenso é recusado pelo banco e o endereço é rejeitado.
+- **Torre**: o legado não tem tabela de torre, e o ID legado dela é o do primeiro morador daquela torre. Se esse morador for apagado do legado, a torre ganha outro ID e a reconciliação acusa divergência; apague a linha antiga dela em `tb_migracao_ids_map` (entidade `torres`).
 
 ### Logs
 
@@ -193,7 +185,7 @@ md-rpa-integration/
 │   ├── rpa/                     # orchestrator
 │   └── audit/                   # migration_log, reconciliation
 ├── sql/ecociente_schema.sql     # schema oficial do destino
-├── docs/banco-legado-er.png     # modelo do banco legado
+├── sql/ecociente_legado_schema.sql  # schema do banco legado (primeiro ano)
 ├── test/                        # pytest (unidade e ponta a ponta)
 ├── assets/                      # logo e ícone
 ├── scripts/pr-bot/              # geração automática de PR
