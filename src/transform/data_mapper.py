@@ -40,10 +40,9 @@ class DataMapper:
         return self.map_tipo(tipo, "tipo_condominio")
 
     def map_endereco(self, endereco):
-        numero = endereco.get("numero")
         return {
             "logradouro": endereco.get("logradouro"),
-            "numero": None if numero is None else str(numero),
+            "numero": endereco.get("numero"),
             "bairro": endereco.get("bairro"),
             "cidade": endereco.get("cidade"),
             "estado": endereco.get("estado"),
@@ -56,9 +55,7 @@ class DataMapper:
         return {
             "nome_usuario": usuario.get("nome"),
             "email_usuario": usuario.get("email"),
-            # O senha_hash do legado é INTEGER, não é um hash utilizável:
-            # o usuário redefine a senha no primeiro acesso.
-            "senha_hash": "MIGRACAO_TEMP",
+            "senha_hash": usuario.get("senha_hash"),
             "cpf": usuario.get("cpf"),
             "ativo": _ativo(usuario.get("ativo")),
             "registro_em": usuario.get("data_cadastro") or datetime.now(),
@@ -92,7 +89,7 @@ class DataMapper:
         }
 
     def map_morador(self, morador):
-        return _legacy(morador, "morador", "usuario", "condominio")
+        return _legacy(morador, "morador", "usuario", "condominio", "torre")
 
     def map_cooperativa(self, cooperativa):
         return {
@@ -104,8 +101,6 @@ class DataMapper:
 
     def transform_dataset(self, dataset):
         sindicos = dataset.get("sindicos", [])
-        # No destino o CPF fica no usuário; no legado só o síndico tem CPF.
-        cpf_do_usuario = {s.get("legacy_usuario_id"): s.get("cpf") for s in sindicos}
         # No legado o síndico aponta para o condomínio; no destino é o inverso.
         # ponytail: com mais de um síndico por condomínio vale o de maior ID.
         sindico_do_condominio = {
@@ -113,10 +108,6 @@ class DataMapper:
         }
         enriquecido = {
             **dataset,
-            "usuarios": [
-                {**u, "cpf": cpf_do_usuario.get(u.get("legacy_usuario_id"))}
-                for u in dataset.get("usuarios", [])
-            ],
             "condominios": [
                 {
                     **c,

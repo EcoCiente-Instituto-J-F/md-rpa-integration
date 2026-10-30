@@ -1,4 +1,4 @@
-"""Consultas de extração do banco legado, por dataset (ver docs/banco-legado-er.png)."""
+"""Consultas de extração do banco legado, por dataset (ver sql/ecociente_legado_schema.sql)."""
 
 QUERIES = {
     "tipos_usuarios": """
@@ -30,7 +30,9 @@ QUERIES = {
             id_endereco AS legacy_endereco_id,
             id_tipo_usuario AS legacy_tipo_usuario_id,
             nome,
+            cpf,
             email,
+            senha_hash,
             status AS ativo,
             data_cadastro
         FROM usuario
@@ -41,15 +43,14 @@ QUERIES = {
             id_telefone AS legacy_telefone_id,
             id_usuario AS legacy_usuario_id,
             numero
-        FROM telefone_usuario
+        FROM telefone
         ORDER BY id_telefone
     """,
     "sindicos": """
         SELECT
             id_sindico AS legacy_sindico_id,
             id_usuario AS legacy_usuario_id,
-            id_condominio AS legacy_condominio_id,
-            cpf
+            id_condominio AS legacy_condominio_id
         FROM sindico
         ORDER BY id_sindico
     """,
@@ -65,31 +66,38 @@ QUERIES = {
         FROM condominio
         ORDER BY id_condominio
     """,
+    # O legado não tem tabela de torre: ela é um texto em morador. Cada torre
+    # distinta do condomínio vira uma linha, identificada pelo primeiro morador.
+    # ponytail: se esse morador for apagado, a torre ganha outro ID legado.
     "torres": """
         SELECT
-            id_torre AS legacy_torre_id,
+            MIN(id_morador) AS legacy_torre_id,
             id_condominio AS legacy_condominio_id,
-            nome
-        FROM torre
-        ORDER BY id_torre
+            (ARRAY_AGG(TRIM(torre) ORDER BY id_morador))[1] AS nome
+        FROM morador
+        WHERE NULLIF(TRIM(torre), '') IS NOT NULL
+        GROUP BY id_condominio, LOWER(TRIM(torre))
+        ORDER BY 1
     """,
-    # No destino o morador aponta para o condomínio; no legado, para a torre.
+    # A torre do morador recebe o mesmo ID legado calculado em "torres".
     "moradores": """
         SELECT
-            m.id_morador AS legacy_morador_id,
-            m.id_usuario AS legacy_usuario_id,
-            t.id_condominio AS legacy_condominio_id
-        FROM morador m
-        LEFT JOIN torre t ON t.id_torre = m.id_torre
-        ORDER BY m.id_morador
+            id_morador AS legacy_morador_id,
+            id_usuario AS legacy_usuario_id,
+            id_condominio AS legacy_condominio_id,
+            CASE WHEN NULLIF(TRIM(torre), '') IS NOT NULL THEN
+                MIN(id_morador) OVER (PARTITION BY id_condominio, LOWER(TRIM(torre)))
+            END AS legacy_torre_id
+        FROM morador
+        ORDER BY id_morador
     """,
-    # A cooperativa do legado não tem nome nem e-mail próprios: vêm do usuário dela.
+    # O e-mail da cooperativa vem do usuário dela.
     "cooperativas": """
         SELECT
             c.id_cooperativa AS legacy_cooperativa_id,
             c.id_usuario AS legacy_usuario_id,
+            c.nome_cooperativa AS nome,
             c.cnpj,
-            u.nome,
             u.email
         FROM cooperativa c
         LEFT JOIN usuario u ON u.id_usuario = c.id_usuario

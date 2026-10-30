@@ -50,6 +50,7 @@ class DataNormalizer:
         return {
             **usuario,
             "nome": self.normalize_name(usuario.get("nome")),
+            "cpf": self.normalize_digits(usuario.get("cpf")),
             "email": self.normalize_email(usuario.get("email")),
             "ativo": self.normalize_boolean(usuario.get("ativo")),
         }
@@ -95,10 +96,9 @@ class DataNormalizer:
                 **t,
                 "numero": self.normalize_digits(t.get("numero")),
             },
-            "sindicos": lambda s: {**s, "cpf": self.normalize_digits(s.get("cpf"))},
             "torres": lambda t: {**t, "nome": self.normalize_text(t.get("nome"))},
         }
-        # Datasets sem normalizador (moradores) passam adiante sem alteração.
+        # Datasets sem normalizador (sindicos, moradores) passam adiante sem alteração.
         normalized = {
             name: (
                 [normalizers[name](item) for item in records]
