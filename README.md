@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/card-readme.png" alt="Card do repositório" width="100%">
+</p>
+
 # Migration RPA System
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
@@ -6,7 +10,7 @@
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 ![GitHub repo size](https://img.shields.io/github/repo-size/EcoCiente-Instituto-J-F/md-rpa-integration?style=for-the-badge)
 ![GitHub last commit](https://img.shields.io/github/last-commit/EcoCiente-Instituto-J-F/md-rpa-integration?style=for-the-badge)
-![License](https://img.shields.io/github/license/EcoCiente-Instituto-J-F/md-rpa-integration?style=for-the-badge)
+![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
 
 > Automação em Python (RPA/ETL) que migra os dados do banco legado do EcoCiente para o novo banco normalizado, com interface local, carga transacional, reconciliação antes do COMMIT e reexecução sem duplicar.
 
@@ -197,7 +201,6 @@ md-rpa-integration/
 ├── test/                        # pytest (unidade e ponta a ponta)
 ├── assets/                      # logo e ícone
 ├── scripts/pr-bot/              # geração automática de PR
-├── PRODUCT.md / DESIGN.md       # contexto de produto e de design da interface
 ├── docker-compose.yaml
 ├── Dockerfile
 ├── requirements.txt
@@ -223,15 +226,11 @@ Agradecemos às seguintes pessoas que contribuíram para este projeto:
 
 ## Contribuindo
 
-Para contribuir com o projeto, siga estas etapas:
+Leia o [CONTRIBUTING.md](CONTRIBUTING.md) antes de abrir uma Pull Request. Ao participar, você concorda com o [Código de Conduta](CODE_OF_CONDUCT.md).
 
-1. Bifurque este repositório.
-2. Crie um branch: `git checkout -b <nome_branch>`.
-3. Faça suas alterações e confirme-as: `git commit -m '<mensagem_commit>'`
-4. Envie para o branch original: `git push origin <nome_branch>`
-5. Crie a solicitação de pull.
+## Segurança
 
-Como alternativa, consulte a documentação do GitHub em [como criar uma solicitação pull](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/creating-a-pull-request).
+Encontrou uma vulnerabilidade? Siga o [SECURITY.md](SECURITY.md). **Não abra issue pública.**
 
 ## 📝 Licença
 
