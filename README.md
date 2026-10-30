@@ -149,12 +149,13 @@ Se linhas migradas forem apagadas do destino, a reconciliação acusa a divergê
 | `sindico` | `tb_sindicos` | Datas de mandato não têm coluna no destino |
 | `condominio` | `tb_condominios` | `token` vira `codigo_acesso`; `status` vira `ativo`; recebe o `sindico_id`; `numero_unidades` e `area_m2` não têm coluna |
 | `morador.torre` | `tb_torres` | Uma torre por nome distinto em cada condomínio (sem diferenciar maiúsculas nem espaços nas pontas) |
-| `morador` | `tb_moradores` | Apartamento e torre não têm coluna no morador do destino |
+| `morador` | `tb_moradores` | Recebe o `torre_id` da torre dele (nulo sem torre); o apartamento não tem coluna no destino |
 | `cooperativa` | `tb_cooperativas` | O e-mail vem do usuário da cooperativa |
 
 ### O que não é migrado
 
 - `parceira` (vínculo entre condomínio e cooperativa, com início e fim): o destino não tem tabela equivalente; pede decisão de negócio antes.
+- `plano` e `assinatura` (cobrança): o destino não tem tabelas equivalentes.
 - `tb_rel_usuarios_condominios` (vínculo com nível de confiança) não é criado para os moradores migrados.
 
 ### Decisões que valem conferir

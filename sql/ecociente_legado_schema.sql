@@ -64,7 +64,7 @@ CREATE TABLE condominio(
 	status BOOLEAN NOT NULL DEFAULT TRUE,
 	numero_unidades INT CHECK(numero_unidades > 0),
 	area_m2 NUMERIC(12,2) CHECK(area_m2 > 0),
-	token VARCHAR(255),
+	token VARCHAR(255) UNIQUE,
 	id_endereco INT NOT NULL,
 	id_tipo_condominio INT,
 	
@@ -144,4 +144,49 @@ CREATE TABLE parceira (
 	CONSTRAINT fk_parceira_cooperativa
 		FOREIGN KEY (id_cooperativa)
 		REFERENCES cooperativa (id_cooperativa)
+);
+
+-- Armazena os planos de assinatura disponíveis para cobrança.
+CREATE TABLE plano (
+	id_plano INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	codigo VARCHAR(20) NOT NULL UNIQUE,
+	nome VARCHAR(60) NOT NULL,
+	descricao VARCHAR(100),
+	unidade VARCHAR(20) NOT NULL CHECK(unidade IN ('unidade', 'm2')),
+	preco_mensal NUMERIC(10,2) NOT NULL CHECK(preco_mensal > 0),
+	preco_anual NUMERIC(10,2) NOT NULL CHECK(preco_anual > 0),
+	ativo BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- Armazena as assinaturas contratadas por usuários e condomínios.
+CREATE TABLE assinatura (
+	id_assinatura INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	ciclo VARCHAR(10) NOT NULL CHECK(ciclo IN ('mensal', 'anual')),
+	quantidade NUMERIC(12,2) NOT NULL CHECK(quantidade > 0),
+	valor_cobrado NUMERIC(12,2) NOT NULL CHECK(valor_cobrado > 0),
+	status VARCHAR(10) NOT NULL DEFAULT 'pendente' CHECK(status IN ('pendente', 'ativa', 'cancelada')),
+	data_inicio DATE,
+	proxima_cobranca DATE,
+	data_cadastro DATE NOT NULL DEFAULT CURRENT_DATE,
+	id_usuario INT NOT NULL UNIQUE,
+	id_condominio INT UNIQUE,
+	id_plano INT NOT NULL,
+	
+	CONSTRAINT ck_assinatura_ativa_com_inicio
+	CHECK(status != 'ativa' OR data_inicio IS NOT NULL),
+	
+	CONSTRAINT ck_assinatura_cobranca_apos_inicio
+		CHECK(proxima_cobranca IS NULL OR data_inicio IS NULL OR proxima_cobranca >= data_inicio),
+	
+	CONSTRAINT fk_assinatura_usuario
+		FOREIGN KEY (id_usuario)
+		REFERENCES usuario (id_usuario),
+	
+	CONSTRAINT fk_assinatura_condominio
+		FOREIGN KEY (id_condominio)
+		REFERENCES condominio (id_condominio),
+	
+	CONSTRAINT fk_assinatura_plano
+		FOREIGN KEY (id_plano)
+		REFERENCES plano (id_plano)
 );

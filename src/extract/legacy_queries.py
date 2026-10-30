@@ -79,11 +79,15 @@ QUERIES = {
         GROUP BY id_condominio, LOWER(TRIM(torre))
         ORDER BY 1
     """,
+    # A torre do morador recebe o mesmo ID legado calculado em "torres".
     "moradores": """
         SELECT
             id_morador AS legacy_morador_id,
             id_usuario AS legacy_usuario_id,
-            id_condominio AS legacy_condominio_id
+            id_condominio AS legacy_condominio_id,
+            CASE WHEN NULLIF(TRIM(torre), '') IS NOT NULL THEN
+                MIN(id_morador) OVER (PARTITION BY id_condominio, LOWER(TRIM(torre)))
+            END AS legacy_torre_id
         FROM morador
         ORDER BY id_morador
     """,

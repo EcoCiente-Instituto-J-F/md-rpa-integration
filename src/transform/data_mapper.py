@@ -89,7 +89,7 @@ class DataMapper:
         }
 
     def map_morador(self, morador):
-        return _legacy(morador, "morador", "usuario", "condominio")
+        return _legacy(morador, "morador", "usuario", "condominio", "torre")
 
     def map_cooperativa(self, cooperativa):
         return {

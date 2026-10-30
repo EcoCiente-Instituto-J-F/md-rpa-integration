@@ -157,6 +157,10 @@ def test_migracao_ponta_a_ponta():
         assert tuple(condominio) == ("ABC123", "12345678000190", True, 2)
         torre = c.execute(text("SELECT nome_torre FROM tb_torres")).scalar_one()
         assert torre == "Torre A"
+        sem_torre = c.execute(
+            text("SELECT COUNT(*) FROM tb_moradores WHERE torre_id IS NULL")
+        ).scalar()
+        assert sem_torre == 0  # os dois moradores da Torre A apontam para ela
         cooperativa = c.execute(
             text(
                 "SELECT nome_cooperativa, cnpj_cooperativa, usuario_id IS NOT NULL FROM tb_cooperativas"
@@ -182,7 +186,7 @@ def test_migracao_ponta_a_ponta():
 
     # Linha migrada apagada do destino: a reconciliação recusa e nada é gravado.
     with target_engine.begin() as c:
-        c.execute(text("DELETE FROM tb_torres"))
+        c.execute(text("DELETE FROM tb_moradores"))
     quebrada = MigrationOrchestrator()
     assert not quebrada.execute()
     assert "reconciliação não fechou" in quebrada.log.snapshot()["erro"]

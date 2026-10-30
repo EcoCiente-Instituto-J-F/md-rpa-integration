@@ -92,7 +92,11 @@ ENTIDADES = (
         "morador",
         "tb_moradores",
         "id_morador",
-        (("usuario_id", "usuario", True), ("condominio_id", "condominio", True)),
+        (
+            ("usuario_id", "usuario", True),
+            ("condominio_id", "condominio", True),
+            ("torre_id", "torre", False),
+        ),
     ),
     Entidade(
         "cooperativa",

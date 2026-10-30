@@ -29,6 +29,13 @@ def test_condominio_recebe_o_sindico_do_legado():
     assert out["condominios"][0]["legacy_sindico_id"] == 5
 
 
+def test_morador_leva_a_torre_do_legado():
+    result = DataMapper().map_morador(
+        {"legacy_morador_id": 2, "legacy_condominio_id": 1, "legacy_torre_id": 1}
+    )
+    assert result["legacy_torre_id"] == 1
+
+
 def test_validacao_rejeita_e_explica():
     validator = DataValidator()
     valid = validator.validate_dataset(
