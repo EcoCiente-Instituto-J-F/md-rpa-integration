@@ -29,6 +29,13 @@ def test_condominio_recebe_o_sindico_do_legado():
     assert out["condominios"][0]["legacy_sindico_id"] == 5
 
 
+def test_morador_leva_a_torre_do_legado():
+    result = DataMapper().map_morador(
+        {"legacy_morador_id": 2, "legacy_condominio_id": 1, "legacy_torre_id": 1}
+    )
+    assert result["legacy_torre_id"] == 1
+
+
 def test_validacao_rejeita_e_explica():
     validator = DataValidator()
     valid = validator.validate_dataset(
@@ -61,14 +68,9 @@ def test_validacao_rejeita_e_explica():
     ]
 
 
-def test_cpf_do_sindico_vai_para_o_usuario():
-    out = DataMapper().transform_dataset(
-        {
-            "usuarios": [{"legacy_usuario_id": 1, "nome": "Ana"}],
-            "sindicos": [
-                {"legacy_sindico_id": 5, "legacy_usuario_id": 1, "cpf": "11122233344"}
-            ],
-        }
+def test_usuario_leva_cpf_e_senha_do_legado():
+    result = DataMapper().map_usuario(
+        {"legacy_usuario_id": 1, "cpf": "11122233344", "senha_hash": "$2b$12$abc"}
     )
-    assert out["usuarios"][0]["cpf"] == "11122233344"
-    assert out["sindicos"] == [{"legacy_sindico_id": 5, "legacy_usuario_id": 1}]
+    assert result["cpf"] == "11122233344"
+    assert result["senha_hash"] == "$2b$12$abc"

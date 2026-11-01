@@ -3,13 +3,15 @@ Reconciliação: confere legado x destino antes do COMMIT.
 
 Para cada entidade a conta tem de fechar:
     registros no legado = migrados + já migrados + rejeitados
-e todo ID mapeado tem de existir no destino.
+e todo ID mapeado tem de existir no destino. Os registros do legado são
+contados pela consulta de extração, porque a torre não é uma tabela no legado.
 """
 
 from sqlalchemy import text
 
 from config.logging_config import get_logger
 from entidades import ENTIDADES
+from extract.legacy_queries import QUERIES
 
 logger = get_logger()
 
@@ -23,7 +25,9 @@ class Reconciliation:
         with self.legacy_engine.connect() as legacy:
             for entidade in ENTIDADES:
                 legado = legacy.execute(
-                    text(f"SELECT COUNT(*) FROM {entidade.tabela_legado}")
+                    text(
+                        f"SELECT COUNT(*) FROM ({QUERIES[entidade.dataset]}) AS origem"
+                    )
                 ).scalar()
                 new_ids = list(id_mapping[entidade.nome].values())
                 no_destino = session.execute(
